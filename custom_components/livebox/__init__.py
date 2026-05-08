@@ -37,6 +37,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> b
 
     coordinator = LiveboxDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
+
+    # If unique_id was cleared (migration) or missing, set it from SerialNumber
+    if entry.unique_id is None and coordinator.unique_id:
+        hass.config_entries.async_update_entry(entry, unique_id=coordinator.unique_id)
+
     entry.runtime_data = coordinator
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
