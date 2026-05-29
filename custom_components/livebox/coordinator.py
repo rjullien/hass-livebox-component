@@ -97,6 +97,11 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                     self.model = 5656  # Sagemcom f@st 5656
                 case "Livebox Nautilus":
                     self.model = 7.2
+                case _:
+                    _LOGGER.warning(
+                        "Unknown Livebox ProductClass: %s", product_class
+                    )
+                    self.model = None
             # Optionals
             wifi_tracking = self.config_entry.options.get(
                 CONF_WIFI_TRACKING, DEFAULT_WIFI_TRACKING
