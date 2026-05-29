@@ -113,7 +113,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             )
             callers, cmissed = await self.async_get_callers()
 
-            await self.async_detect_new_dvices(devices)
+            await self.async_detect_new_devices(devices)
 
             return {
                 "cmissed": cmissed,
@@ -490,7 +490,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         )
         return ra.get("Enable", False) is True
 
-    async def async_detect_new_dvices(self, devices) -> None:
+    async def async_detect_new_devices(self, devices) -> None:
         """New devices detected."""
         if self.data and self.data.get("devices"):
             for key in devices:
