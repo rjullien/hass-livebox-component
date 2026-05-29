@@ -139,7 +139,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 "remote_access": await self.async_is_remote_access(),
                 "topology_via_device": topology_via_device,
                 "topology_repeaters": topology_repeaters,
-                "lan": await self.async_get_lan(devices),
+                "lan": await self.async_get_lan(),
                 "upnp": await self.async_get_port_forwarding(),
                 "dhcp_leases": await self.async_get_dhcp_leases(),
                 "guest_dhcp_leases": await self.async_get_dhcp_leases("guest"),
@@ -375,7 +375,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         ).get("status", {})
         return find_item(veip0, "gpon.veip0", {})
 
-    async def async_get_lan(self, lan_devices):
+    async def async_get_lan(self):
         """Get lan status."""
         self_devices = (
             await self._make_request(
