@@ -38,8 +38,10 @@ _LOGGER = logging.getLogger(__name__)
 class LiveboxSensorEntityDescription(SensorEntityDescription):
     """Represents an Flow Sensor."""
 
-    value_fn: Callable[..., Any]
+    value_fn: Callable[..., Any] | None = None
     attrs: dict[str, Callable[..., Any]] | None = None
+    # When set, native_value uses per-instance rolling 32-bit accumulation
+    rolling_data_path: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -48,40 +50,6 @@ class LiveboxDeviceSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[..., Any]
     attrs: dict[str, Callable[..., Any]] | None = None
-
-
-def get_rolling_32_bit_value_fn(path: str) -> Callable[..., Any]:
-    """Returns a closure function, that extracts a rolling 32-bit value from"""
-    """the coordinator data structure, and tweaks its result so that HASS"""
-    """properly accumulates the total rolling value."""
-    """Meant for monotonically increasing counters: fiber/DSL Tx/Rx, and WiFi Tx/Rx"""
-
-    previous_reading: int = 0
-    previous_uptime: int = 0
-    rolls: int = 0
-
-    def value_fn(coordinator_data) -> int:
-        nonlocal previous_reading
-        nonlocal previous_uptime
-        nonlocal rolls
-        current_uptime = coordinator_data.get("infos", {}).get("UpTime") or 0
-        current_reading = find_item(coordinator_data, path, 0)
-
-        if current_uptime < previous_uptime:
-            # The router has reset, so clear up previous counter value
-            previous_reading = 0
-            rolls = 0
-
-        if current_reading < previous_reading:
-            _LOGGER.debug("Rolling over 32-bit integer counter: %s", path)
-            rolls += 1
-
-        previous_reading = current_reading
-        previous_uptime = current_uptime
-
-        return (rolls << 32) + current_reading
-
-    return value_fn
 
 
 def get_closure_value_fn(path: str) -> Callable[..., Any]:
@@ -290,7 +258,7 @@ SENSOR_TYPES: Final[list[LiveboxSensorEntityDescription]] = [
         key="wifi_rx",
         name="Wifi Rx",
         icon="mdi:wifi-arrow-down",
-        value_fn=get_rolling_32_bit_value_fn("wifi_stats.RxBytes"),
+        rolling_data_path="wifi_stats.RxBytes",
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -302,7 +270,7 @@ SENSOR_TYPES: Final[list[LiveboxSensorEntityDescription]] = [
         key="wifi_tx",
         name="Wifi Tx",
         icon="mdi:wifi-arrow-up",
-        value_fn=get_rolling_32_bit_value_fn("wifi_stats.TxBytes"),
+        rolling_data_path="wifi_stats.TxBytes",
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.MEGABYTES,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -375,7 +343,7 @@ SENSOR_TYPES: Final[list[LiveboxSensorEntityDescription]] = [
         key="fiber_tx",
         name="Fiber Tx",
         icon=UPLOAD_ICON,
-        value_fn=get_rolling_32_bit_value_fn("fiber_stats.TxBytes"),
+        rolling_data_path="fiber_stats.TxBytes",
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -387,7 +355,7 @@ SENSOR_TYPES: Final[list[LiveboxSensorEntityDescription]] = [
         key="fiber_rx",
         name="Fiber Rx",
         icon=DOWNLOAD_ICON,
-        value_fn=get_rolling_32_bit_value_fn("fiber_stats.RxBytes"),
+        rolling_data_path="fiber_stats.RxBytes",
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -563,12 +531,46 @@ class LiveboxSensor(LiveboxEntity, SensorEntity):  # pyrefly: ignore[inconsisten
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, description)
+        # Per-instance state for rolling 32-bit counter accumulation (item 2a).
+        # Module-level closures were shared across all Livebox instances, corrupting
+        # counters when two boxes are configured. State is now per-entity-instance.
+        self._rolling_prev_reading: int = 0
+        self._rolling_prev_uptime: int = 0
+        self._rolling_rolls: int = 0
+
+    def _compute_rolling_32_bit(self, data_path: str) -> int:
+        """Compute the accumulated 32-bit rolling counter value.
+
+        Resets on router reboot (uptime decrease) and accumulates across 32-bit
+        wrap-arounds. State is stored on the entity instance, so each Livebox
+        entity has its own independent counters.
+        """
+        current_uptime: int = self.coordinator.data.get("infos", {}).get("UpTime") or 0
+        current_reading: int = find_item(self.coordinator.data, data_path, 0)
+
+        if current_uptime < self._rolling_prev_uptime:
+            # The router rebooted — reset accumulated state.
+            self._rolling_prev_reading = 0
+            self._rolling_rolls = 0
+
+        if current_reading < self._rolling_prev_reading:
+            _LOGGER.debug("Rolling over 32-bit integer counter: %s", data_path)
+            self._rolling_rolls += 1
+
+        self._rolling_prev_reading = current_reading
+        self._rolling_prev_uptime = current_uptime
+
+        return (self._rolling_rolls << 32) + current_reading
 
     @property
     def native_value(self) -> float | None:
         """Return the native value of the device."""
         description = cast(LiveboxSensorEntityDescription, self.entity_description)
-        return description.value_fn(self.coordinator.data)
+        if description.rolling_data_path is not None:
+            return self._compute_rolling_32_bit(description.rolling_data_path)
+        if description.value_fn is not None:
+            return description.value_fn(self.coordinator.data)
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
