@@ -201,7 +201,7 @@ async def test_unknown_product_class_logs_warning_and_sets_model_none(
     )
     coordinator.model = None
     coordinator.unique_id = None
-    coordinator.data = None
+    coordinator.data = None  # pyrefly: ignore[bad-assignment]
     coordinator._topology_cache = ({}, {})
     coordinator._topology_cache_at = None
     coordinator._topology_last_update = None
