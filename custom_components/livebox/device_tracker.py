@@ -229,6 +229,10 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
         self._device = self.coordinator.data.get("devices", {}).get(
             self._device_key, {}
         )
+        # TODO: handle device removal — when _device is empty the device has
+        # disappeared from the Livebox; ideally mark the entity unavailable
+        # rather than keeping the last known state indefinitely. Doing so
+        # cleanly requires touching the entity registry and is deferred.
         self._attr_ip_address = self._device.get("IPAddress")
         self._via_device = self.coordinator.get_parent_device_identifier(
             self._device_key
