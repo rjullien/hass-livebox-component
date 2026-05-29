@@ -12,7 +12,10 @@ from aiosysbus.exceptions import AiosysbusException, HttpRequestFailed
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import DEFAULT_TIME_ZONE, UTC
@@ -67,6 +70,53 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             verify_tls=self.config_entry.data.get(CONF_VERIFY_TLS, True),
         )
 
+    async def async_persist_session(self) -> None:
+        """Save current session credentials to storage for logout on restart."""
+        from .session import LiveboxSessionStore
+
+        try:
+            auth = self.api._auth
+            token = auth.session_token
+            cookies = auth._cookies
+            # Only persist if we have real string values (not mocks)
+            if isinstance(token, str) and isinstance(cookies, dict) and cookies:
+                base_url = str(auth.base_url)
+                store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
+                await store.async_save(
+                    cookies={str(k): str(v) for k, v in cookies.items()},
+                    context_id=token,
+                    base_url=base_url,
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Failed to persist session", exc_info=True)
+
+    async def async_logout(self) -> None:
+        """Logout from the Livebox to release the API session slot."""
+        from .session import LiveboxSessionStore, async_logout_session
+
+        try:
+            auth = self.api._auth
+            cookies = auth._cookies
+            if isinstance(cookies, dict) and cookies:
+                session = async_get_clientsession(self.hass)
+                base_url = str(auth.base_url)
+                success = await async_logout_session(
+                    session, base_url, {str(k): str(v) for k, v in cookies.items()}
+                )
+                if success:
+                    auth.session_token = None
+                    auth._cookies = {}
+                    _LOGGER.info("Logged out from Livebox")
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Logout failed", exc_info=True)
+
+        # Clear persisted session
+        try:
+            store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
+            await store.async_clear()
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Failed to clear session store", exc_info=True)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data."""
         try:
@@ -114,6 +164,9 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             callers, cmissed = await self.async_get_callers()
 
             await self.async_detect_new_devices(devices)
+
+            # Persist session for clean logout on restart
+            await self.async_persist_session()
 
             return {
                 "cmissed": cmissed,
