@@ -152,10 +152,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> bool:
     """Unload a config entry."""
-    coordinator: LiveboxDataUpdateCoordinator = entry.runtime_data
-    # Logout from the Livebox to free the admin session slot
-    await coordinator.async_logout()
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    # Unload platforms first to stop any residual polls
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    # Then logout to free the admin session slot on the Livebox
+    coordinator: LiveboxDataUpdateCoordinator | None = getattr(
+        entry, "runtime_data", None
+    )
+    if coordinator is not None:
+        await coordinator.async_logout()
+    return unload_ok
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: LiveboxConfigEntry):
