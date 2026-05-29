@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -43,10 +42,16 @@ def _make_calendar(callers: list[dict[str, Any]]) -> LiveboxCallLogCalendar:
     return calendar
 
 
+# Use dates relative to "now" so the 30-day pruning window doesn't discard them.
+_NOW = datetime.datetime.now(datetime.UTC)
+_TODAY = _NOW.replace(hour=0, minute=0, second=0, microsecond=0)
+
 _CALLERS = [
     {
         "id": "1",
-        "date": "2024-06-01 10:00:00+00:00",
+        "date": (_TODAY + datetime.timedelta(hours=10)).strftime(
+            "%Y-%m-%d %H:%M:%S+00:00"
+        ),
         "status": "succeeded",
         "origin": "remote",
         "phone_number": "+33600000001",
@@ -54,7 +59,9 @@ _CALLERS = [
     },
     {
         "id": "2",
-        "date": "2024-06-01 11:00:00+00:00",
+        "date": (_TODAY + datetime.timedelta(hours=11)).strftime(
+            "%Y-%m-%d %H:%M:%S+00:00"
+        ),
         "status": "missed",
         "origin": "remote",
         "phone_number": "+33600000002",
@@ -67,8 +74,8 @@ async def test_async_get_events_returns_list() -> None:
     """async_get_events must return a list (not a lazy iterator)."""
     calendar = _make_calendar(_CALLERS)
 
-    start = datetime.datetime(2024, 6, 1, 0, 0, 0, tzinfo=datetime.timezone.utc)
-    end = datetime.datetime(2024, 6, 2, 0, 0, 0, tzinfo=datetime.timezone.utc)
+    start = _TODAY
+    end = _TODAY + datetime.timedelta(days=1)
 
     result = await calendar.async_get_events(MagicMock(), start, end)
 
@@ -82,8 +89,8 @@ async def test_async_get_events_filters_by_range() -> None:
     calendar = _make_calendar(_CALLERS)
 
     # Window that only covers the first call (10:00–11:00)
-    start = datetime.datetime(2024, 6, 1, 9, 0, 0, tzinfo=datetime.timezone.utc)
-    end = datetime.datetime(2024, 6, 1, 10, 30, 0, tzinfo=datetime.timezone.utc)
+    start = _TODAY + datetime.timedelta(hours=9)
+    end = _TODAY + datetime.timedelta(hours=10, minutes=30)
 
     result = await calendar.async_get_events(MagicMock(), start, end)
 
