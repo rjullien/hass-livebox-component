@@ -98,9 +98,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 case "Livebox Nautilus":
                     self.model = 7.2
                 case _:
-                    _LOGGER.warning(
-                        "Unknown Livebox ProductClass: %s", product_class
-                    )
+                    _LOGGER.warning("Unknown Livebox ProductClass: %s", product_class)
                     self.model = None
             # Optionals
             wifi_tracking = self.config_entry.options.get(
@@ -328,7 +326,9 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             try:
                 utc_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
             except (ValueError, TypeError):
-                _LOGGER.debug("Skipping call with unparseable startTime: %s", start_time)
+                _LOGGER.debug(
+                    "Skipping call with unparseable startTime: %s", start_time
+                )
                 continue
             local_dt = utc_dt.replace(tzinfo=UTC).astimezone(tz=DEFAULT_TIME_ZONE)
             caller = {
