@@ -41,12 +41,15 @@ class LiveboxSessionStore:
         cookies: dict[str, str],
         context_id: str | None,
         base_url: str,
+        *,
+        verify_tls: bool = True,
     ) -> None:
         """Save current session credentials."""
         self._data = {
             "cookies": cookies,
             "context_id": context_id,
             "base_url": base_url,
+            "verify_tls": verify_tls,
         }
         await self._store.async_save(self._data)
 
@@ -75,15 +78,24 @@ class LiveboxSessionStore:
         """Return True if we have stored session credentials."""
         return bool(self._data.get("cookies"))
 
+    @property
+    def verify_tls(self) -> bool:
+        """Return stored verify_tls setting (defaults to True)."""
+        return self._data.get("verify_tls", True)
+
 
 async def async_logout_session(
     http_session: ClientSession,
     base_url: str,
     cookies: dict[str, str],
+    *,
+    verify_tls: bool = True,
 ) -> bool:
     """Logout from the Livebox by calling /logout.cmd with the session cookie.
 
     Returns True if the logout succeeded (307 redirect = success).
+    The ``verify_tls`` parameter mirrors the integration config: pass ``False``
+    for self-signed certificates (aiohttp: ``ssl=False`` skips verification).
     """
     try:
         url = URL(base_url).parent / "logout.cmd"
@@ -95,6 +107,7 @@ async def async_logout_session(
             headers=headers,
             allow_redirects=False,
             timeout=ClientTimeout(total=10),
+            ssl=verify_tls,
         ) as response:
             if response.status in (200, 301, 302, 307):
                 _LOGGER.debug(
@@ -102,7 +115,10 @@ async def async_logout_session(
                     response.status,
                 )
                 return True
-            _LOGGER.debug("Logout returned unexpected status %s", response.status)
+            _LOGGER.debug(
+                "Logout returned unexpected status %s",
+                response.status,
+            )
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Logout failed: %s", err)
     return False

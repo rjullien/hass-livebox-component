@@ -93,7 +93,10 @@ async def _async_logout_orphaned_session(
 
         session = async_get_clientsession(hass)
         success = await async_logout_session(
-            session, store.base_url or "", store.cookies
+            session,
+            store.base_url or "",
+            store.cookies,
+            verify_tls=store.verify_tls,
         )
         if success:
             _LOGGER.info("Orphaned session logged out successfully")

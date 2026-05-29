@@ -81,11 +81,13 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             # Only persist if we have real string values (not mocks)
             if isinstance(token, str) and isinstance(cookies, dict) and cookies:
                 base_url = str(auth.base_url)
+                verify_tls = getattr(auth, "verify_tls", True)
                 store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
                 await store.async_save(
                     cookies={str(k): str(v) for k, v in cookies.items()},
                     context_id=token,
                     base_url=base_url,
+                    verify_tls=bool(verify_tls),
                 )
         except Exception:  # noqa: BLE001
             _LOGGER.debug("Failed to persist session", exc_info=True)
@@ -100,8 +102,12 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             if isinstance(cookies, dict) and cookies:
                 session = async_get_clientsession(self.hass)
                 base_url = str(auth.base_url)
+                verify_tls = getattr(auth, "verify_tls", True)
                 success = await async_logout_session(
-                    session, base_url, {str(k): str(v) for k, v in cookies.items()}
+                    session,
+                    base_url,
+                    {str(k): str(v) for k, v in cookies.items()},
+                    verify_tls=bool(verify_tls),
                 )
                 if success:
                     auth.session_token = None
