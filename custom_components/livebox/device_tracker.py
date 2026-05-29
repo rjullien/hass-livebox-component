@@ -9,7 +9,6 @@ from typing import Any, cast
 from homeassistant.components.device_tracker.config_entry import ScannerEntity
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import EntityDescription
@@ -231,15 +230,7 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
             self._device_key, {}
         )
         self._attr_ip_address = self._device.get("IPAddress")
-        via_device = self.coordinator.get_parent_device_identifier(self._device_key)
-        if via_device != self._via_device and self.device_entry is not None:
-            # Re-link the existing device when topology becomes available later.
-            self._via_device = via_device
-            self.device_entry = dr.async_get(self.hass).async_get_or_create(
-                config_entry_id=self.coordinator.config_entry.entry_id,
-                **cast(DeviceInfo, self.device_info),
-            )
-        else:
-            self._via_device = via_device
-
+        self._via_device = self.coordinator.get_parent_device_identifier(
+            self._device_key
+        )
         self.async_write_ha_state()
