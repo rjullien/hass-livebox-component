@@ -656,8 +656,6 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             return await func(*args)
         except AiosysbusException as error:
-            if isinstance(error, HttpRequestFailed):
-                self.api._auth.session_token = None
             _LOGGER.error("Error while execute: %s (%s)", func.__name__, error)
         return {}
 
