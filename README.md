@@ -3,7 +3,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/rjullien/hass-livebox-component?style=for-the-badge)](https://github.com/rjullien/hass-livebox-component/releases)
 [![GitHub Activity](https://img.shields.io/github/commit-activity/y/rjullien/hass-livebox-component?style=for-the-badge)](https://github.com/rjullien/hass-livebox-component/commits/master)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.7.2%2B-blue?style=for-the-badge)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.5.0%2B-blue?style=for-the-badge)](https://www.home-assistant.io/)
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
@@ -15,13 +15,34 @@ Custom component for [Home Assistant](https://www.home-assistant.io/) to observe
 
 ## Requirements
 
-| Component           | Minimum version |
-| ------------------- | --------------- |
-| Home Assistant      | **2026.7.2**    |
-| Python (dev only)   | **3.14.2**      |
-| aiosysbus (runtime) | **1.2.4**       |
+|                    | Minimum (runtime)               | Tested in CI      |
+| ------------------ | ------------------------------- | ----------------- |
+| **Home Assistant** | **2025.5.0**                    | 2026.7.2          |
+| **Python**         | _(bundled with HA — see below)_ | 3.14.2 (dev only) |
+| **aiosysbus**      | **1.2.4**                       | 1.2.4             |
 
-The dev/test stack targets Home Assistant **2026.7.2** (see `uv.lock`). Older HA versions are not validated by CI.
+### Minimum Home Assistant version
+
+**2025.5.0** — declared by upstream in `hacs.json`, consistent with the code:
+
+- `AddConfigEntryEntitiesCallback` (calendar platform) exists since HA **2025.3.0**
+- `async_step_reconfigure` (config flow) exists since HA **2024.12**
+- upstream bumped the declared minimum from `2024.1.0` → `2025.5.0` in Oct 2025
+
+The fork does not introduce APIs that require a version above 2025.5.0.
+
+### Python — what users actually need
+
+You do **not** install Python for this integration. Home Assistant Core ships its own Python runtime.
+
+| Your Home Assistant version | Python bundled by HA Core |
+| --------------------------- | ------------------------- |
+| 2025.5.0 – 2026.2.x         | **3.13.2+**               |
+| 2026.3.0 and newer          | **3.14.2+**               |
+
+So with the declared minimum **HA 2025.5.0**, you need a HA install that already runs on **Python 3.13.2+** (OS / Container / Supervised — HA handles this).
+
+**Python 3.14.2** in `pyproject.toml` applies only to **local development** (`uv sync`, pytest, lint) — not to end users installing via HACS.
 
 ## Supported features
 
@@ -47,7 +68,7 @@ Then add the integration:
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=livebox)
 
-> Do **not** use `cyr-ius/hass-livebox-component` if you want this fork (session management, multi-box fixes, HA 2026.7.2 validation).
+> Do **not** use `cyr-ius/hass-livebox-component` if you want this fork (session management, multi-box fixes).
 
 ### Initial setup
 
@@ -112,7 +133,7 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 - Modernize dev stack: Python 3.14.2, Home Assistant 2026.7.2, pytest-hacc 0.13.346
 - Fix CI lockfile (PyYAML / aiosysbus compatibility)
 - Adopt 4-part versioning (`upstream.fork`)
-- Update HACS minimum HA version to 2026.7.2
+- Update HACS minimum HA version documentation (runtime min: 2025.5.0, CI: 2026.7.2)
 
 ### 2.5.4.1
 
