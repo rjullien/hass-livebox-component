@@ -1,99 +1,145 @@
 # Orange Livebox Router
 
-This a _custom component_ for [Home Assistant](https://www.home-assistant.io/).
-The `livebox` integration allows you to observe and control [Livebox router](http://www.orange.fr/).
+[![GitHub release](https://img.shields.io/github/v/release/rjullien/hass-livebox-component?style=for-the-badge)](https://github.com/rjullien/hass-livebox-component/releases)
+[![GitHub Activity](https://img.shields.io/github/commit-activity/y/rjullien/hass-livebox-component?style=for-the-badge)](https://github.com/rjullien/hass-livebox-component/commits/master)
+[![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.5.0%2B-blue?style=for-the-badge)](https://www.home-assistant.io/)
 
-There is currently support for the following device types within Home Assistant:
+Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
+
+> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.5.4** (commit `4a817d5`, 2026-06-29). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
+>
+> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.5.4.2` = upstream 2.5.4, fork rev 2).
+>
+> **HACS:** use repository `rjullien/hass-livebox-component` (not `cyr-ius/hass-livebox-component`) to get this fork.
+
+## Requirements
+
+|                    | Minimum (runtime)               | Tested in CI      |
+| ------------------ | ------------------------------- | ----------------- |
+| **Home Assistant** | **2025.5.0**                    | 2026.7.2          |
+| **Python**         | _(bundled with HA — see below)_ | 3.14.2 (dev only) |
+| **aiosysbus**      | **1.2.4**                       | 1.2.4             |
+
+### Minimum Home Assistant version
+
+**2025.5.0** — declared by upstream in `hacs.json`, consistent with the code:
+
+- `AddConfigEntryEntitiesCallback` (calendar platform) exists since HA **2025.3.0**
+- `async_step_reconfigure` (config flow) exists since HA **2024.12**
+- upstream bumped the declared minimum from `2024.1.0` → `2025.5.0` in Oct 2025
+
+The fork does not introduce APIs that require a version above 2025.5.0.
+
+### Python — what users actually need
+
+You do **not** install Python for this integration. Home Assistant Core ships its own Python runtime.
+
+| Your Home Assistant version | Python bundled by HA Core |
+| --------------------------- | ------------------------- |
+| 2025.5.0 – 2026.2.x         | **3.13.2+**               |
+| 2026.3.0 and newer          | **3.14.2+**               |
+
+So with the declared minimum **HA 2025.5.0**, you need a HA install that already runs on **Python 3.13.2+** (OS / Container / Supervised — HA handles this).
+
+**Python 3.14.2** in `pyproject.toml` applies only to **local development** (`uv sync`, pytest, lint) — not to end users installing via HACS.
+
+## Supported features
 
 - Sensor with traffic metrics
-- Binary Sensor with wan status , public ip , private ip
-- Device tracker for connected devices (via option add wired devices)
-- Switch for enable/disable Wireless and Guest Wifi
-- Press button to restart box
-- Press button to ring phone
-- Press button to clear calls
+- Binary sensor: WAN status, public IP, private IP
+- Device tracker for connected devices (optional wired tracking)
+- Switch: enable/disable wireless and guest WiFi
+- Button: restart box, ring phone, clear calls
+- Calendar: missed calls
+- Config flow reconfigure (change credentials without re-adding)
 
-![GitHub release](https://img.shields.io/github/release/Cyr-ius/hass-livebox-component)
-[![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
-![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=integration%20usage&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.livebox.total)
+## Installation
 
-## Development
+### HACS (this fork)
 
-This repository uses [`uv`](https://docs.astral.sh/uv/) for local development.
+Add the custom repository in HACS:
 
-```bash
-uv sync --group dev
-uv run pytest
-uv run pyrefly check custom_components tests
-uv run pre-commit run --all-files
-```
+`https://github.com/rjullien/hass-livebox-component`
 
-## Configuration
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rjullien&repository=hass-livebox-component&category=integration)
 
-The preferred way to setup the Orange Livebox platform is by enabling the discovery component.
-
-Add Livebox module via HACS
-
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=cyr-ius&repository=hass-livebox-component&category=integration)
-
-Add your device via the Integration menu
+Then add the integration:
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=livebox)
+
+> Do **not** use `cyr-ius/hass-livebox-component` if you want this fork (session management, multi-box fixes).
 
 ### Initial setup
 
 You must have set a password for your Livebox router web administration page.
 
-The first time Home Assistant will connect to your Livebox, you will need to specify the password of livebox.
+On first connection, Home Assistant asks for the Livebox password.
 
-### Options configure
+### Options
 
-You can use the Configure button to change the following options:
+Use **Configure** on the integration to change:
 
-- Wired tracking (default: **No**): I track wired equipment
-- Wireless tracking (default: **Yes**): I track wireless equipment
-- Timeout tracking (default: **300 seconds**) : Time before the device is considered disconnected (Some iOS devices tend to disconnect/reconnect to networks unexpectedly)
-- Track devices (default: **Active**):
-  - All: Displays all active or inactive devices
+- **Wired tracking** (default: No)
+- **Wireless tracking** (default: Yes)
+- **Timeout tracking** (default: 300 s): delay before a device is considered away
+- **Track devices** (default: Active): All or Active only
 
-  - Active: Displays only active devices (that have an IP address)
+## Supported routers
 
-### Supported routers
+Only routers with Livebox OS:
 
-Only the routers with Livebox OS are supported:
-
-- Livebox 3
-- Livebox 4
-- Livebox 5
-- Livebox 6
-- Livebox 7
-- Livebox W7
+- Livebox 3, 4, 5, 6, 7, W7
+- Livebox Nautilus (Arcadyan)
 - KPN Box 12 (Firmware: V12.C.23.04.36)
 - Sagemcom f@st 5656
-- Livebox Nautilus (Arcadyan)
 
 ### Unsupported routers
 
-Despite being labelled "Livebox", the following router models **cannot** be supported:
+Despite the "Livebox" label, these models **cannot** be supported:
 
-- Arcadyan PRV3399 (["Livebox Plus"](https://ayuda.orange.es/dispositivos-y-routers/2381-router-livebox-plus))
-- Arcadyan ERV33AX349B-LT (ARLTFIBRA6 or ["Livebox 6+"](https://ayuda.orange.es/dispositivos-y-routers/2755-router-livebox-6plus))
-- ZTE ZTEGLB7xxxxxx (["Livebox 7 ZTE"](https://ayuda.orange.es/dispositivos-y-routers/3220-router-livebox-7))
+- Arcadyan PRV3399 ([Livebox Plus](https://ayuda.orange.es/dispositivos-y-routers/2381-router-livebox-plus))
+- Arcadyan ERV33AX349B-LT ([Livebox 6+](https://ayuda.orange.es/dispositivos-y-routers/2755-router-livebox-6plus))
+- ZTE ZTEGLB7xxxxxx ([Livebox 7 ZTE](https://ayuda.orange.es/dispositivos-y-routers/3220-router-livebox-7))
 
-## Presence Detection
+## Presence detection
 
-This platform offers presence detection by keeping track of the
-devices connected to a [Livebox](http://www.orange.fr/) router.
+Tracks devices connected to the Livebox. Can be disabled in integration options.
 
-Ability to disable this option by integration options
+The Livebox waits ~1–2 minutes before marking a device inactive. New connections are reported almost immediately.
 
-### Notes
+## Development
 
-Note that the Livebox waits for some time before marking a device as inactive, meaning that there will be a small delay (1 or 2 minutes) between the time you disconnect a device and the time it will appear as "away" in Home Assistant.
+Requires Python **3.14.2+** and [`uv`](https://docs.astral.sh/uv/).
 
-You should take this into account when specifying the `consider_home` parameter.
-On the contrary, the Livebox immediately reports devices newly connected, so they should appear as "home" almost instantly, as soon as Home Assistant refreshes the devices states.
+```bash
+uv sync --group dev
+uv run pytest
+uv run prek run --all-files
+```
 
-## Sensor
+CI runs on Python 3.14 with Home Assistant **2026.7.2** (via `pytest-homeassistant-custom-component`).
 
-This platform offers you sensors to monitor a Livebox router. The monitored conditions are instant upload and download rates in Mb/s.
+## Upstream
+
+Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component)
+
+Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
+
+## Changelog (fork)
+
+### 2.5.4.2
+
+- Modernize dev stack: Python 3.14.2, Home Assistant 2026.7.2, pytest-hacc 0.13.346
+- Fix CI lockfile (PyYAML / aiosysbus compatibility)
+- Adopt 4-part versioning (`upstream.fork`)
+- Update HACS minimum HA version documentation (runtime min: 2025.5.0, CI: 2026.7.2)
+
+### 2.5.4.1
+
+- Merge upstream v2.5.4 while keeping fork fixes:
+  - Session logout/persistence (prevent Livebox session exhaustion)
+  - Per-instance rolling 32-bit counters for multi-box setups
+  - WAN access unique_id migration (#287)
+  - Guest WiFi turn_off fix for Livebox Fibre
+  - Reconfigure flow, device sensors, eth interfaces (from upstream)
