@@ -52,8 +52,6 @@ class LiveboxDeviceSensorEntityDescription(SensorEntityDescription):
     attrs: dict[str, Callable[..., Any]] | None = None
 
 
-
-
 def get_closure_value_fn(path: str) -> Callable[..., Any]:
     """Returns a closure function for value_fn of entities with variable name"""
     return lambda x: find_item(x, path)

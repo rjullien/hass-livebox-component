@@ -72,7 +72,6 @@ def _migrate_wan_access_unique_ids(
         )
 
 
-
 async def _async_logout_orphaned_session(
     hass: HomeAssistant, entry: LiveboxConfigEntry
 ) -> None:
