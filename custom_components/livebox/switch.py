@@ -19,6 +19,18 @@ from .coordinator import LiveboxDataUpdateCoordinator
 from .entity import LiveboxEntity
 
 
+async def _async_turn_on_guest_wifi_fibre(api: Any) -> None:
+    """Enable guest Wi-Fi on Livebox Fibre and reset the activation timer."""
+    await api.nmc.async_set_guest_wifi(enable=True)
+    await api.nmc.async_set_wlan_timer()
+
+
+async def _async_turn_off_guest_wifi_fibre(api: Any) -> None:
+    """Disable guest Wi-Fi on Livebox Fibre and disable the activation timer."""
+    await api.nmc.async_set_guest_wifi(enable=False)
+    await api.nmc.async_disable_wlan_timer()
+
+
 @dataclass(frozen=True, kw_only=True)
 class LiveboxSwitchEntityDescription(SwitchEntityDescription):
     """Class describing Livebox button entities."""
@@ -63,8 +75,8 @@ SWITCH_TYPES_5: Final[tuple[LiveboxSwitchEntityDescription, ...]] = (
         icon=GUESTWIFI_ICON,
         translation_key="guest_wifi",
         value_fn=lambda x: x.get("guest_wifi"),
-        turn_on=lambda x: x.nmc.async_guest_wifi(True),
-        turn_off=lambda x: x.nmc.async_guest_wifi(False),
+        turn_on=_async_turn_on_guest_wifi_fibre,
+        turn_off=_async_turn_off_guest_wifi_fibre,
     ),
 )
 

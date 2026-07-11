@@ -109,7 +109,48 @@ async def test_switch_guest_wifi(
     assert state.state == STATE_ON
 
 
-@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+@pytest.mark.parametrize("AIOSysbus", ["5"], indirect=True)
+async def test_switch_guest_wifi_fibre_turn_off(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock,
+    service_calls: list[ServiceCall],
+):
+    """Livebox Fibre must disable guest Wi-Fi without the aiosysbus timer bug."""
+    wifi_data = copy.deepcopy(await AIOSysbus.nmc.async_get_guest_wifi())
+    wifi_data["status"]["Enable"] = True
+    AIOSysbus.nmc.async_get_guest_wifi.return_value = wifi_data
+
+    async def mock_set_guest_wifi(*, enable: bool) -> None:
+        wifi_data["status"]["Enable"] = bool(enable)
+
+    AIOSysbus.nmc.async_set_guest_wifi.side_effect = mock_set_guest_wifi
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get(f"switch.{AIOSysbus.__unique_name}_guest_wifi")
+    assert state is not None
+    assert state.state == STATE_ON
+
+    await hass.services.async_call(
+        Platform.SWITCH,
+        "turn_off",
+        {ATTR_ENTITY_ID: f"switch.{AIOSysbus.__unique_name}_guest_wifi"},
+        blocking=True,
+    )
+
+    AIOSysbus.nmc.async_set_guest_wifi.assert_awaited_once_with(enable=False)
+    AIOSysbus.nmc.async_disable_wlan_timer.assert_awaited_once_with()
+    AIOSysbus.nmc.async_guest_wifi.assert_not_awaited()
+
+    coordinator = config_entry.runtime_data
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get(f"switch.{AIOSysbus.__unique_name}_guest_wifi")
+    assert state is not None
+    assert state.state == STATE_OFF
 async def test_switch_wan_access(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
