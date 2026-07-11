@@ -1,12 +1,12 @@
 {
   "domain": "livebox",
   "name": "Orange Livebox",
-  "codeowners": ["@cyr-ius"],
+  "codeowners": ["@rjullien", "@cyr-ius"],
   "config_flow": true,
   "dependencies": ["ssdp"],
-  "documentation": "https://github.com/cyr-ius/hass-livebox-component",
+  "documentation": "https://github.com/rjullien/hass-livebox-component",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/cyr-ius/hass-livebox-component/issues",
+  "issue_tracker": "https://github.com/rjullien/hass-livebox-component/issues",
   "loggers": ["aiosysbus"],
   "requirements": ["aiosysbus==1.2.4"],
   "ssdp": [
@@ -15,5 +15,5 @@
       "friendlyName": "Orange Livebox"
     }
   ],
-  "version": "2.7.0"
+  "version": "2.5.4.2"
 }
