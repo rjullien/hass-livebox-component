@@ -8,7 +8,7 @@ on:
 
 jobs:
   stale:
-    if: github.repository_owner == 'cyr-ius'
+    if: github.repository_owner == 'rjullien'
     runs-on: ubuntu-latest
     permissions:
       issues: write
