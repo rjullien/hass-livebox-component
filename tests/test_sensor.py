@@ -361,4 +361,3 @@ def test_fiber_rate_attributes_use_gigabits_per_second() -> None:
     assert tx_description.attrs["Upstream max rate (Gbps)"](data) == 1.24416
     assert tx_description.attrs["Upstream current rate (Gbps)"](data) == 1.24416
     assert tx_description.attrs["Max bitrate (Gbps)"](data) == 10
-

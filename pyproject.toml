@@ -12,10 +12,10 @@ packages = []
 
 [dependency-groups]
 dev = [
-  "aiosysbus",
+  "aiosysbus==1.2.4",
   "async-upnp-client",
   "prek",
-  "pytest-homeassistant-custom-component",
+  "pytest-homeassistant-custom-component>=0.13.300,<0.13.320",
   "pytest-asyncio",
   "python-typing-update",
 ]
