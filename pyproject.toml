@@ -2,7 +2,7 @@
 name = "hass-livebox-component"
 version = "0.0.0"
 description = "Development environment for the Orange Livebox Home Assistant custom component"
-requires-python = ">=3.13.2"
+requires-python = ">=3.14.2"
 dependencies = []
 
 [tool.setuptools]
@@ -15,7 +15,7 @@ dev = [
   "aiosysbus==1.2.4",
   "async-upnp-client",
   "prek",
-  "pytest-homeassistant-custom-component>=0.13.300,<0.13.320",
+  "pytest-homeassistant-custom-component>=0.13.346",
   "pytest-asyncio",
   "python-typing-update",
 ]
@@ -33,7 +33,7 @@ log_cli = true
 package = false
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 88
 
 [tool.ruff.lint]
