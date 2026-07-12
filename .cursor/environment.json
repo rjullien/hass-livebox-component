@@ -1,0 +1,4 @@
+{
+  "install": "curl -fsSL https://tailscale.com/install.sh | sh && chmod +x scripts/setup-tailscale.sh scripts/test-ha-access.sh && ./scripts/setup-tailscale.sh && uv sync",
+  "start": "./scripts/setup-tailscale.sh"
+}
