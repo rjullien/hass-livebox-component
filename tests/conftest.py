@@ -321,6 +321,9 @@ def mock_router(request) -> Iterator[MagicMock]:
         )
         instance.nmc.async_reboot = AsyncMock()
         instance.nmc.async_set_wifi = AsyncMock()
+        instance.nmc.async_set_guest_wifi = AsyncMock()
+        instance.nmc.async_set_wlan_timer = AsyncMock()
+        instance.nmc.async_disable_wlan_timer = AsyncMock()
         instance.nmc.async_guest_wifi = AsyncMock()
 
         instance.usermanagement.async_get_users = AsyncMock(
