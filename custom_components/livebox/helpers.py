@@ -1,6 +1,28 @@
 """Helpers functions."""
 
+from collections.abc import Mapping
 from typing import Any
+
+from .const import CONF_DISPLAY_DEVICES, DEFAULT_DISPLAY_DEVICES
+
+# Legacy option value kept by older installs after the selector was renamed.
+_LEGACY_DISPLAY_DEVICES = {"Active only": "Active"}
+
+
+def normalize_display_devices(value: str | None) -> str:
+    """Normalize legacy device_tracker_mode values to current selector options."""
+    if value is None:
+        return DEFAULT_DISPLAY_DEVICES
+    return _LEGACY_DISPLAY_DEVICES.get(value, value)
+
+
+def normalize_options(options: Mapping[str, Any]) -> dict[str, Any]:
+    """Return options with legacy values migrated to current ones."""
+    normalized = dict(options)
+    current = normalized.get(CONF_DISPLAY_DEVICES)
+    if current in _LEGACY_DISPLAY_DEVICES:
+        normalized[CONF_DISPLAY_DEVICES] = _LEGACY_DISPLAY_DEVICES[current]
+    return normalized
 
 
 def find_item(data: dict[str, Any], key_chain: str, default: Any = None) -> Any:

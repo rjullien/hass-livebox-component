@@ -26,12 +26,11 @@ from .const import (
     CONF_USE_TLS,
     CONF_VERIFY_TLS,
     CONF_WIFI_TRACKING,
-    DEFAULT_DISPLAY_DEVICES,
     DEFAULT_LAN_TRACKING,
     DEFAULT_WIFI_TRACKING,
     DOMAIN,
 )
-from .helpers import find_item
+from .helpers import find_item, normalize_display_devices
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=1)
@@ -228,8 +227,8 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         """Get all devices."""
         devices_tracker = {}
         device_counters = {"wireless": 0, "wired": 0}
-        mode = self.config_entry.options.get(
-            CONF_DISPLAY_DEVICES, DEFAULT_DISPLAY_DEVICES
+        mode = normalize_display_devices(
+            self.config_entry.options.get(CONF_DISPLAY_DEVICES)
         )
         if mode == "All":
             parameters = {
@@ -384,8 +383,10 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
             try:
                 utc_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
-            except ValueError, TypeError:
-                _LOGGER.debug("Skipping call with unparsable startTime: %s", start_time)
+            except (ValueError, TypeError):
+                _LOGGER.debug(
+                    "Skipping call with unparsable startTime: %s", start_time
+                )
                 continue
             local_dt = utc_dt.replace(tzinfo=UTC).astimezone(tz=DEFAULT_TIME_ZONE)
             caller = {

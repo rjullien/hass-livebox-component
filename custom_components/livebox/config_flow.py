@@ -37,8 +37,10 @@ from .const import (
     DEFAULT_TRACKING_TIMEOUT,
     DEFAULT_USERNAME,
     DEFAULT_WIFI_TRACKING,
+    DISPLAY_DEVICES_OPTIONS,
     DOMAIN,
 )
+from .helpers import normalize_display_devices, normalize_options
 
 DATA_SCHEMA = vol.Schema(
     {
@@ -187,7 +189,11 @@ class LiveboxOptionsFlowHandler(config_entries.OptionsFlow):
     ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         if user_input:
-            return self.async_create_entry(title="", data=user_input)
+            return self.async_create_entry(title="", data=normalize_options(user_input))
+
+        # Normalize suggested values so legacy "Active only" maps to "Active"
+        # without persisting yet (setup migrates on load; save persists here).
+        options = normalize_options(self.config_entry.options)
 
         return self.async_show_form(
             step_id="init",
@@ -203,11 +209,16 @@ class LiveboxOptionsFlowHandler(config_entries.OptionsFlow):
                         vol.Required(
                             CONF_TRACKING_TIMEOUT, default=DEFAULT_TRACKING_TIMEOUT
                         ): int,
+                        # Normalize legacy "Active only" before In() so saves
+                        # succeed; vol.In remains serializable for the selector UI.
                         vol.Required(
                             CONF_DISPLAY_DEVICES, default=DEFAULT_DISPLAY_DEVICES
-                        ): vol.In(["All", "Active"]),
+                        ): vol.All(
+                            normalize_display_devices,
+                            vol.In(list(DISPLAY_DEVICES_OPTIONS)),
+                        ),
                     },
                 ),
-                self.config_entry.options,
+                options,
             ),
         )
