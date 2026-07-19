@@ -7,9 +7,9 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.5.4** (commit `4a817d5`, 2026-06-29). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
+> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.5.4** (commit `43bc16b`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
 >
-> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.5.4.2` = upstream 2.5.4, fork rev 2).
+> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.5.4.3` = upstream 2.5.4, fork rev 3).
 >
 > **HACS:** use repository `rjullien/hass-livebox-component` (not `cyr-ius/hass-livebox-component`) to get this fork.
 
@@ -83,7 +83,7 @@ Use **Configure** on the integration to change:
 - **Wired tracking** (default: No)
 - **Wireless tracking** (default: Yes)
 - **Timeout tracking** (default: 300 s): delay before a device is considered away
-- **Track devices** (default: Active): All or Active only
+- **Track devices** (default: Active): All or Active
 
 ## Supported routers
 
@@ -127,6 +127,14 @@ Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/ha
 Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
 
 ## Changelog (fork)
+
+### 2.5.4.3
+
+- Rebase onto upstream v2.5.4 (`43bc16b`); keep `X.Y.Z.N` versioning (`2.5.4` + fork rev 3)
+- Restore Fibre guest Wi-Fi helpers and `via_device` registry re-link after rebase
+- Ensure parent repeater exists before client `via_device` update
+- Migrate legacy `Active only` → `Active` in setup and options flow
+- Fix `async_get_callers` exception syntax (`except (ValueError, TypeError)`)
 
 ### 2.5.4.2
 
