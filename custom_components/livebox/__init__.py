@@ -10,7 +10,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
-from .const import CALLID, DOMAIN, PLATFORMS
+from .const import CALLID, CONF_DISPLAY_DEVICES, DOMAIN, PLATFORMS
 from .coordinator import LiveboxDataUpdateCoordinator
 
 type LiveboxConfigEntry = ConfigEntry[LiveboxDataUpdateCoordinator]
@@ -117,6 +117,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> b
             type(entry.unique_id).__name__,
         )
         hass.config_entries.async_update_entry(entry, unique_id=None)
+
+    # Migrate legacy display_devices option "Active only" → "Active"
+    if entry.options.get(CONF_DISPLAY_DEVICES) == "Active only":
+        _LOGGER.info(
+            "Migrating device_tracker_mode from 'Active only' to 'Active' for entry %s",
+            entry.entry_id,
+        )
+        hass.config_entries.async_update_entry(
+            entry,
+            options={**entry.options, CONF_DISPLAY_DEVICES: "Active"},
+        )
 
     # Logout any orphaned session from a previous run (prevents exhaustion)
     await _async_logout_orphaned_session(hass, entry)
