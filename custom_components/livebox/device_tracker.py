@@ -269,8 +269,27 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
             # Re-link the existing device when topology becomes available later.
             # device_info alone does not reliably refresh via_device on an
             # existing registry entry, so update the device registry explicitly.
+            registry = dr.async_get(self.hass)
+            # New repeaters may still be awaiting entity setup in the same
+            # refresh that first exposes topology_via_device. Ensure the
+            # parent exists before linking, otherwise HA rejects via_device.
+            if registry.async_get_device(identifiers={via_device}) is None:
+                repeater_name = self.coordinator.data.get("topology_repeaters", {}).get(
+                    via_device[1]
+                )
+                if repeater_name is None:
+                    # Parent not ready and not a known repeater — keep the
+                    # previous via_device so a later refresh can retry.
+                    self.async_write_ha_state()
+                    return
+                registry.async_get_or_create(
+                    config_entry_id=self.coordinator.config_entry.entry_id,
+                    identifiers={via_device},
+                    name=repeater_name,
+                    via_device=(DOMAIN, self.coordinator.unique_id or DOMAIN),
+                )
             self._via_device = via_device
-            dr.async_get(self.hass).async_get_or_create(
+            registry.async_get_or_create(
                 config_entry_id=self.coordinator.config_entry.entry_id,
                 **cast(DeviceInfo, self.device_info),
             )

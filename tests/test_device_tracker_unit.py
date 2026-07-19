@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from homeassistant.helpers.entity import EntityDescription
@@ -19,8 +19,8 @@ def auto_enable_custom_integrations() -> None:
     """Avoid pulling the Home Assistant test harness into pure unit tests."""
 
 
-async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> None:
-    """Re-parent an existing tracker when topology appears on a later refresh."""
+def _make_tracker_entity() -> LiveboxDeviceScannerEntity:
+    """Build a scanner entity with router parent and no topology yet."""
     coordinator = object.__new__(LiveboxDataUpdateCoordinator)
     coordinator.hass = cast(Any, SimpleNamespace())
     coordinator.unique_id = "LIVEBOX-1"
@@ -53,11 +53,12 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> Non
     entity.hass = coordinator.hass
     entity.device_entry = cast(Any, SimpleNamespace(id="device-1"))
     entity.async_write_ha_state = MagicMock()
+    return entity
 
-    registry = MagicMock()
-    registry.async_get_or_create.return_value = SimpleNamespace(id="device-1")
 
-    coordinator.data = {
+def _topology_data() -> dict[str, Any]:
+    """Coordinator payload where the client is parented under a repeater."""
+    return {
         "infos": {"ProductClass": "Livebox 7"},
         "devices": {
             "DD:DD:DD:DD:DD:01": {
@@ -69,6 +70,18 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> Non
         "topology_repeaters": {"CC:CC:CC:CC:CC:01": "Repeater-1"},
         "topology_via_device": {"DD:DD:DD:DD:DD:01": "CC:CC:CC:CC:CC:01"},
     }
+
+
+async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> None:
+    """Re-parent an existing tracker when topology appears on a later refresh."""
+    entity = _make_tracker_entity()
+    coordinator = entity.coordinator
+
+    registry = MagicMock()
+    registry.async_get_device.return_value = SimpleNamespace(id="repeater-1")
+    registry.async_get_or_create.return_value = SimpleNamespace(id="device-1")
+
+    coordinator.data = _topology_data()
 
     with patch(
         "custom_components.livebox.device_tracker.dr.async_get",
@@ -82,6 +95,43 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> Non
     registry.async_get_or_create.assert_called_once()
     assert registry.async_get_or_create.call_args.kwargs["config_entry_id"] == "entry-1"
     assert registry.async_get_or_create.call_args.kwargs["via_device"] == (
+        DOMAIN,
+        "CC:CC:CC:CC:CC:01",
+    )
+    entity.async_write_ha_state.assert_called_once()
+
+
+async def test_device_tracker_creates_missing_repeater_before_via_update() -> None:
+    """Create the repeater device entry before re-parenting in the same refresh."""
+    entity = _make_tracker_entity()
+    coordinator = entity.coordinator
+
+    registry = MagicMock()
+    registry.async_get_device.return_value = None
+    registry.async_get_or_create.return_value = SimpleNamespace(id="device-1")
+
+    coordinator.data = _topology_data()
+
+    with patch(
+        "custom_components.livebox.device_tracker.dr.async_get",
+        return_value=registry,
+    ):
+        entity._handle_coordinator_update()
+
+    assert entity.device_info is not None
+    assert entity.device_info["via_device"] == (DOMAIN, "CC:CC:CC:CC:CC:01")
+    assert registry.async_get_or_create.call_count == 2
+    assert registry.async_get_or_create.call_args_list[0] == call(
+        config_entry_id="entry-1",
+        identifiers={(DOMAIN, "CC:CC:CC:CC:CC:01")},
+        name="Repeater-1",
+        via_device=(DOMAIN, "LIVEBOX-1"),
+    )
+    assert (
+        registry.async_get_or_create.call_args_list[1].kwargs["config_entry_id"]
+        == "entry-1"
+    )
+    assert registry.async_get_or_create.call_args_list[1].kwargs["via_device"] == (
         DOMAIN,
         "CC:CC:CC:CC:CC:01",
     )
