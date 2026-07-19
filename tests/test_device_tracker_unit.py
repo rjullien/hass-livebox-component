@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from homeassistant.helpers.entity import EntityDescription
@@ -20,7 +20,7 @@ def auto_enable_custom_integrations() -> None:
 
 
 async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> None:
-    """Update via_device when topology appears on a later refresh."""
+    """Re-parent an existing tracker when topology appears on a later refresh."""
     coordinator = object.__new__(LiveboxDataUpdateCoordinator)
     coordinator.hass = cast(Any, SimpleNamespace())
     coordinator.unique_id = "LIVEBOX-1"
@@ -51,9 +51,12 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> Non
         coordinator.data["devices"]["DD:DD:DD:DD:DD:01"],
     )
     entity.hass = coordinator.hass
+    entity.device_entry = cast(Any, SimpleNamespace(id="device-1"))
     entity.async_write_ha_state = MagicMock()
 
-    # Simulate a coordinator update where topology now shows via_device
+    registry = MagicMock()
+    registry.async_get_or_create.return_value = SimpleNamespace(id="device-1")
+
     coordinator.data = {
         "infos": {"ProductClass": "Livebox 7"},
         "devices": {
@@ -67,11 +70,19 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> Non
         "topology_via_device": {"DD:DD:DD:DD:DD:01": "CC:CC:CC:CC:CC:01"},
     }
 
-    entity._handle_coordinator_update()
+    with patch(
+        "custom_components.livebox.device_tracker.dr.async_get",
+        return_value=registry,
+    ):
+        entity._handle_coordinator_update()
 
-    # IP should be updated
     assert entity._attr_ip_address == "192.168.1.99"
-    # via_device should now reflect the repeater
-    assert entity._via_device == (DOMAIN, "CC:CC:CC:CC:CC:01")
-    # async_write_ha_state should have been called
+    assert entity.device_info is not None
+    assert entity.device_info["via_device"] == (DOMAIN, "CC:CC:CC:CC:CC:01")
+    registry.async_get_or_create.assert_called_once()
+    assert registry.async_get_or_create.call_args.kwargs["config_entry_id"] == "entry-1"
+    assert registry.async_get_or_create.call_args.kwargs["via_device"] == (
+        DOMAIN,
+        "CC:CC:CC:CC:CC:01",
+    )
     entity.async_write_ha_state.assert_called_once()
