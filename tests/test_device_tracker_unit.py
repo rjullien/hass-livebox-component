@@ -51,6 +51,7 @@ def _make_tracker_entity() -> LiveboxDeviceScannerEntity:
         coordinator.data["devices"]["DD:DD:DD:DD:DD:01"],
     )
     entity.hass = coordinator.hass
+    entity.device_entry = cast(Any, SimpleNamespace(id="device-1"))
     entity.async_write_ha_state = MagicMock()
     return entity
 
