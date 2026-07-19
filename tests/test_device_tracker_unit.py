@@ -51,7 +51,6 @@ def _make_tracker_entity() -> LiveboxDeviceScannerEntity:
         coordinator.data["devices"]["DD:DD:DD:DD:DD:01"],
     )
     entity.hass = coordinator.hass
-    entity.device_entry = cast(Any, SimpleNamespace(id="device-1"))
     entity.async_write_ha_state = MagicMock()
     return entity
 
@@ -89,6 +88,7 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh() -> Non
     ):
         entity._handle_coordinator_update()
 
+    # IP should be updated
     assert entity._attr_ip_address == "192.168.1.99"
     assert entity.device_info is not None
     assert entity.device_info["via_device"] == (DOMAIN, "CC:CC:CC:CC:CC:01")
