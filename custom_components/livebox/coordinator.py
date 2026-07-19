@@ -383,8 +383,10 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
             try:
                 utc_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
-            except ValueError, TypeError:
-                _LOGGER.debug("Skipping call with unparsable startTime: %s", start_time)
+            except (ValueError, TypeError):
+                _LOGGER.debug(
+                    "Skipping call with unparsable startTime: %s", start_time
+                )
                 continue
             local_dt = utc_dt.replace(tzinfo=UTC).astimezone(tz=DEFAULT_TIME_ZONE)
             caller = {
