@@ -130,7 +130,8 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ### 2.5.6.1
 
-- Align with upstream **v2.5.6** (`f1fe858`); keep `X.Y.Z.N` versioning (`2.5.6` + fork rev 1)
+- Rebase fork history onto upstream **v2.5.6** (`f1fe858`) so GitHub Compare / ForkUpstreamMonitor report `behind_by=0` (identical tree; no `2.5.6.2`)
+- Align with upstream **v2.5.6**; keep `X.Y.Z.N` versioning (`2.5.6` + fork rev 1)
 - Take upstream recorder fix: drop high-churn `uptime` attribute from WAN connectivity binary sensor (dedicated uptime sensor remains)
 - Take upstream `ScannerEntity` import path fix (`device_tracker.entity`)
 - Tooling: `actions/stale` v11, `actions/setup-python` v7, ruff `v0.16.2`, codespell `v2.4.3` (keep fork Python 3.14 / HA 2026.7.2 CI stack and `rjullien` workflow guards)
