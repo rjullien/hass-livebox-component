@@ -33,7 +33,9 @@ log_cli = true
 package = false
 
 [tool.ruff]
-target-version = "py314"
+# Match lowest HA-bundled Python for the declared runtime minimum (HA 2025.5 → 3.13).
+# Dev/CI may still run on 3.14; do not emit 3.14-only syntax (e.g. bare except A, B).
+target-version = "py313"
 line-length = 88
 
 [tool.ruff.lint]

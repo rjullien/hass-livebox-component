@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 from typing import Any, Final, cast
 
 from homeassistant.components.binary_sensor import (
@@ -51,9 +50,6 @@ BINARYSENSOR_TYPES: Final[tuple[LiveboxBinarySensorEntityDescription, ...]] = (
             "wan_ipv6prefix": lambda x: find_item(x, "wan_status.IPv6DelegatedPrefix"),
             "wired clients": lambda x: x.get("count_wired_devices"),
             "wireless clients": lambda x: x.get("count_wireless_devices"),
-            "uptime": lambda x: (
-                datetime.today() - timedelta(seconds=find_item(x, "infos.UpTime", 0))
-            ),
         },
         translation_key="connectivity",
     ),
