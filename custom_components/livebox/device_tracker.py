@@ -6,8 +6,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, cast
 
-from homeassistant.components.device_tracker import ScannerEntity
 from homeassistant.components.device_tracker.const import SourceType
+from homeassistant.components.device_tracker.entity import ScannerEntity
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo

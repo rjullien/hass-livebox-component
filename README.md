@@ -7,9 +7,9 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.5.4** (commit `43bc16b`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
+> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.5.6** (commit `f1fe858`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
 >
-> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.5.4.3` = upstream 2.5.4, fork rev 3).
+> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.5.6.1` = upstream 2.5.6, fork rev 1).
 >
 > **HACS:** use repository `rjullien/hass-livebox-component` (not `cyr-ius/hass-livebox-component`) to get this fork.
 
@@ -127,6 +127,15 @@ Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/ha
 Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
 
 ## Changelog (fork)
+
+### 2.5.6.1
+
+- Align with upstream **v2.5.6** (`f1fe858`); keep `X.Y.Z.N` versioning (`2.5.6` + fork rev 1)
+- Take upstream recorder fix: drop high-churn `uptime` attribute from WAN connectivity binary sensor (dedicated uptime sensor remains)
+- Take upstream `ScannerEntity` import path fix (`device_tracker.entity`)
+- Tooling: `actions/stale` v11, `actions/setup-python` v7, ruff `v0.16.2`, codespell `v2.4.3` (keep fork Python 3.14 / HA 2026.7.2 CI stack and `rjullien` workflow guards)
+- Keep ruff `target-version = "py313"` so format/check do not emit Python 3.14-only `except A, B` syntax (breaks HA 2025.5 / Python 3.13)
+- Preserve fork safeguards: session logout/persistence, multi-box rolling counters, WAN access unique_id / override, Fibre guest Wi‑Fi helpers, `via_device` registry re-link
 
 ### 2.5.4.3
 
