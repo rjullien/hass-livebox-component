@@ -8,7 +8,7 @@ on:
 jobs:
   hacs:
     name: HACS Action
-    if: github.repository_owner == 'cyr-ius'
+    if: github.repository_owner == 'rjullien'
     runs-on: "ubuntu-latest"
     steps:
       - name: 📥 Checkout the repository
