@@ -298,6 +298,9 @@ def mock_router(
         )
         instance.nmc.async_reboot = AsyncMock()
         instance.nmc.async_set_wifi = AsyncMock()
+        instance.nmc.async_set_guest_wifi = AsyncMock()
+        instance.nmc.async_set_wlan_timer = AsyncMock()
+        instance.nmc.async_disable_wlan_timer = AsyncMock()
         instance.nmc.async_guest_wifi = AsyncMock()
 
         async def _mock_auth_post(
