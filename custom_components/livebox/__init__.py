@@ -10,8 +10,9 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 
-from .const import CALLID, DOMAIN, PLATFORMS
+from .const import CALLID, CONF_DISPLAY_DEVICES, DOMAIN, PLATFORMS
 from .coordinator import LiveboxDataUpdateCoordinator
+from .helpers import normalize_options
 
 type LiveboxConfigEntry = ConfigEntry[LiveboxDataUpdateCoordinator]
 
@@ -72,8 +73,66 @@ def _migrate_wan_access_unique_ids(
         )
 
 
+async def _async_logout_orphaned_session(
+    hass: HomeAssistant, entry: LiveboxConfigEntry
+) -> None:
+    """Logout a session that was left open from a previous HA run.
+
+    On HA restart, the in-memory session (cookie + contextID) is lost.
+    If we persisted it before shutdown, we can still send the logout
+    request to free the session slot on the Livebox.
+    """
+    from .session import LiveboxSessionStore, async_logout_session
+
+    store = LiveboxSessionStore(hass, entry.entry_id)
+    await store.async_load()
+    if store.has_session:
+        _LOGGER.info("Found orphaned Livebox session from previous run, logging out")
+        from homeassistant.helpers.aiohttp_client import (
+            async_get_clientsession,
+        )
+
+        session = async_get_clientsession(hass)
+        success = await async_logout_session(
+            session,
+            store.base_url or "",
+            store.cookies,
+            verify_tls=store.verify_tls,
+        )
+        if success:
+            _LOGGER.info("Orphaned session logged out successfully")
+        else:
+            _LOGGER.warning(
+                "Failed to logout orphaned session (Livebox may be unreachable)"
+            )
+        await store.async_clear()
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> bool:
     """Set up Livebox as config entry."""
+    # Fix: migrate unique_id from bool to string if needed (legacy entries)
+    if entry.unique_id is not None and not isinstance(entry.unique_id, str):
+        _LOGGER.warning(
+            "Migrating Livebox config entry unique_id from %s (%s) to None",
+            entry.unique_id,
+            type(entry.unique_id).__name__,
+        )
+        hass.config_entries.async_update_entry(entry, unique_id=None)
+
+    # Migrate legacy display_devices option "Active only" → "Active"
+    options = normalize_options(entry.options)
+    if options != dict(entry.options):
+        _LOGGER.info(
+            "Migrating device_tracker_mode from %r to %r for entry %s",
+            entry.options.get(CONF_DISPLAY_DEVICES),
+            options.get(CONF_DISPLAY_DEVICES),
+            entry.entry_id,
+        )
+        hass.config_entries.async_update_entry(entry, options=options)
+
+    # Logout any orphaned session from a previous run (prevents exhaustion)
+    await _async_logout_orphaned_session(hass, entry)
+
     coordinator = LiveboxDataUpdateCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
 
@@ -105,7 +164,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> b
 
 async def async_unload_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    # Unload platforms first to stop any residual polls
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    # Then logout to free the admin session slot on the Livebox
+    coordinator: LiveboxDataUpdateCoordinator | None = getattr(
+        entry, "runtime_data", None
+    )
+    if coordinator is not None:
+        await coordinator.async_logout()
+    return unload_ok
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: LiveboxConfigEntry):

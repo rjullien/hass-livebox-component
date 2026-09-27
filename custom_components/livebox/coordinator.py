@@ -8,11 +8,14 @@ from datetime import datetime, timedelta
 from typing import Any, cast
 
 from aiosysbus import AIOSysbus
-from aiosysbus.exceptions import AiosysbusException
+from aiosysbus.exceptions import AiosysbusException, HttpRequestFailed
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.aiohttp_client import (
+    async_create_clientsession,
+    async_get_clientsession,
+)
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import DEFAULT_TIME_ZONE, UTC
@@ -23,12 +26,11 @@ from .const import (
     CONF_USE_TLS,
     CONF_VERIFY_TLS,
     CONF_WIFI_TRACKING,
-    DEFAULT_DISPLAY_DEVICES,
     DEFAULT_LAN_TRACKING,
     DEFAULT_WIFI_TRACKING,
     DOMAIN,
 )
-from .helpers import find_item
+from .helpers import find_item, normalize_display_devices
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=1)
@@ -67,6 +69,59 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             verify_tls=self.config_entry.data.get(CONF_VERIFY_TLS, True),
         )
 
+    async def async_persist_session(self) -> None:
+        """Save current session credentials to storage for logout on restart."""
+        from .session import LiveboxSessionStore
+
+        try:
+            auth = self.api._auth
+            token = auth.session_token
+            cookies = auth._cookies
+            # Only persist if we have real string values (not mocks)
+            if isinstance(token, str) and isinstance(cookies, dict) and cookies:
+                base_url = str(auth.base_url)
+                verify_tls = getattr(auth, "verify_tls", True)
+                store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
+                await store.async_save(
+                    cookies={str(k): str(v) for k, v in cookies.items()},
+                    context_id=token,
+                    base_url=base_url,
+                    verify_tls=bool(verify_tls),
+                )
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Failed to persist session", exc_info=True)
+
+    async def async_logout(self) -> None:
+        """Logout from the Livebox to release the API session slot."""
+        from .session import LiveboxSessionStore, async_logout_session
+
+        try:
+            auth = self.api._auth
+            cookies = auth._cookies
+            if isinstance(cookies, dict) and cookies:
+                session = async_get_clientsession(self.hass)
+                base_url = str(auth.base_url)
+                verify_tls = getattr(auth, "verify_tls", True)
+                success = await async_logout_session(
+                    session,
+                    base_url,
+                    {str(k): str(v) for k, v in cookies.items()},
+                    verify_tls=bool(verify_tls),
+                )
+                if success:
+                    auth.session_token = None
+                    auth._cookies = {}
+                    _LOGGER.info("Logged out from Livebox")
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Logout failed", exc_info=True)
+
+        # Clear persisted session
+        try:
+            store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
+            await store.async_clear()
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("Failed to clear session store", exc_info=True)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data."""
         try:
@@ -97,6 +152,9 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                     self.model = 5656  # Sagemcom f@st 5656
                 case "Livebox Nautilus":
                     self.model = 7.2
+                case _:
+                    _LOGGER.warning("Unknown Livebox ProductClass: %s", product_class)
+                    self.model = None
             # Optionals
             wifi_tracking = self.config_entry.options.get(
                 CONF_WIFI_TRACKING, DEFAULT_WIFI_TRACKING
@@ -110,7 +168,10 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             )
             callers, cmissed = await self.async_get_callers()
 
-            await self.async_detect_new_dvices(devices)
+            await self.async_detect_new_devices(devices)
+
+            # Persist session for clean logout on restart
+            await self.async_persist_session()
 
             return {
                 "cmissed": cmissed,
@@ -134,13 +195,22 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 "remote_access": await self.async_is_remote_access(),
                 "topology_via_device": topology_via_device,
                 "topology_repeaters": topology_repeaters,
-                "lan": await self.async_get_lan(devices),
+                "lan": await self.async_get_lan(),
                 "upnp": await self.async_get_port_forwarding(),
                 "dhcp_leases": await self.async_get_dhcp_leases(),
                 "guest_dhcp_leases": await self.async_get_dhcp_leases("guest"),
                 "stats": await self.async_get_results(),
             }
         except AiosysbusException as error:
+            # If the Livebox API is unreachable (empty reply, connection reset),
+            # invalidate the session token so aiosysbus will re-authenticate
+            # on the next polling cycle instead of reusing a stale token.
+            if isinstance(error, HttpRequestFailed):
+                self.api._auth.session_token = None
+                _LOGGER.debug(
+                    "Cleared session token after communication failure, "
+                    "will re-authenticate on next update"
+                )
             _LOGGER.error("Error while fetch data information: %s", error)
             raise UpdateFailed(error) from error
 
@@ -157,8 +227,8 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         """Get all devices."""
         devices_tracker = {}
         device_counters = {"wireless": 0, "wired": 0}
-        mode = self.config_entry.options.get(
-            CONF_DISPLAY_DEVICES, DEFAULT_DISPLAY_DEVICES
+        mode = normalize_display_devices(
+            self.config_entry.options.get(CONF_DISPLAY_DEVICES)
         )
         if mode == "All":
             parameters = {
@@ -361,7 +431,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         ).get("status", {})
         return find_item(veip0, "gpon.veip0", {})
 
-    async def async_get_lan(self, lan_devices):
+    async def async_get_lan(self):
         """Get lan status."""
         self_devices = (
             await self._make_request(
@@ -476,7 +546,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         )
         return ra.get("Enable", False) is True
 
-    async def async_detect_new_dvices(self, devices) -> None:
+    async def async_detect_new_devices(self, devices) -> None:
         """New devices detected."""
         if self.data and self.data.get("devices"):
             for key in devices:

@@ -93,7 +93,7 @@ class LiveboxCallLogCalendar(  # pyrefly: ignore[inconsistent-inheritance]
 
                 self._calls[call_id] = CalendarEvent(
                     start=call_time,
-                    end=call_time + +datetime.timedelta(seconds=call["duration"]),
+                    end=call_time + datetime.timedelta(seconds=call["duration"]),
                     summary="{} {} {}".format(
                         call_type,
                         call_direction,
@@ -103,10 +103,30 @@ class LiveboxCallLogCalendar(  # pyrefly: ignore[inconsistent-inheritance]
 
         self._max_call_id = max(max_call_id_in_batch, self._max_call_id)
 
+        # Prune calls older than 30 days to prevent unbounded growth.
+        cutoff = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=30)
+        # Make cutoff naive if calls are stored as naive datetimes.
+        cutoff_naive = cutoff.replace(tzinfo=None)
+        stale_keys = [
+            k
+            for k, ev in self._calls.items()
+            if (ev.start.tzinfo is None and ev.start < cutoff_naive)
+            or (ev.start.tzinfo is not None and ev.start < cutoff)
+        ]
+        if stale_keys:
+            _LOGGER.debug(
+                "Pruning %d call(s) older than 30 days from call log cache",
+                len(stale_keys),
+            )
+            for k in stale_keys:
+                del self._calls[k]
+
         return cast(
             list[CalendarEvent],
-            filter(
-                lambda ev: ev.start > start_date and ev.end < end_date,
-                self._calls.values(),
+            list(
+                filter(
+                    lambda ev: ev.start > start_date and ev.end < end_date,
+                    self._calls.values(),
+                )
             ),
         )
