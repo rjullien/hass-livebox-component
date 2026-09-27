@@ -7,9 +7,9 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.5.6** (commit `f1fe858`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
+> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.6.0** (commit `30c75a0`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
 >
-> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.5.6.1` = upstream 2.5.6, fork rev 1).
+> **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.6.0.1` = upstream 2.6.0, fork rev 1).
 >
 > **HACS:** use repository `rjullien/hass-livebox-component` (not `cyr-ius/hass-livebox-component`) to get this fork.
 
@@ -19,7 +19,7 @@ Custom component for [Home Assistant](https://www.home-assistant.io/) to observe
 | ------------------ | ------------------------------- | ----------------- |
 | **Home Assistant** | **2025.5.0**                    | 2026.7.2          |
 | **Python**         | _(bundled with HA — see below)_ | 3.14.2 (dev only) |
-| **aiosysbus**      | **1.2.4**                       | 1.2.4             |
+| **aiosysbus**      | **1.2.5**                       | 1.2.5             |
 
 ### Minimum Home Assistant version
 
@@ -128,9 +128,18 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ## Changelog (fork)
 
+### 2.6.0.1
+
+- Rebase fork history onto upstream **v2.6.0** (`30c75a0`) so GitHub Compare / ForkUpstreamMonitor report `behind_by=0`
+- Take upstream 2.6.0: `aiosysbus` 1.2.5, `wifi_bridge` client tracking, repeater topology refresh for roaming clients, ethernet reporting on ETH* interfaces, last reboot reason sensor, HA 2026.12 reconfigure listener fix, AIOSysbus-driven test suite
+- Keep upstream `Funbox6` model mapping alongside the fork's unknown-ProductClass fallback warning
+- Upstream test guidelines (`AGENTS.md`) adopted; upstream's rewritten test suite kept, fork rolling-counter regression tests preserved
+- Preserve fork safeguards: session logout/persistence, multi-box rolling counters, WAN access unique_id / override, Fibre guest Wi‑Fi helpers, `via_device` registry re-link
+
 ### 2.5.6.1
 
-- Align with upstream **v2.5.6** (`f1fe858`); keep `X.Y.Z.N` versioning (`2.5.6` + fork rev 1)
+- Rebase fork history onto upstream **v2.5.6** (`f1fe858`) so GitHub Compare / ForkUpstreamMonitor report `behind_by=0` (identical tree; no `2.5.6.2`)
+- Align with upstream **v2.5.6**; keep `X.Y.Z.N` versioning (`2.5.6` + fork rev 1)
 - Take upstream recorder fix: drop high-churn `uptime` attribute from WAN connectivity binary sensor (dedicated uptime sensor remains)
 - Take upstream `ScannerEntity` import path fix (`device_tracker.entity`)
 - Tooling: `actions/stale` v11, `actions/setup-python` v7, ruff `v0.16.2`, codespell `v2.4.3` (keep fork Python 3.14 / HA 2026.7.2 CI stack and `rjullien` workflow guards)
