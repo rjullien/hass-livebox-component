@@ -1,5 +1,9 @@
 # Agent guidelines
 
+## Fork-only
+
+Fork: read [FORK-SAFEGUARDS.md](FORK-SAFEGUARDS.md) before any upstream sync/merge.
+
 Home Assistant custom integration for Orange Livebox routers
 (`custom_components/livebox`), talking to the router through `aiosysbus`.
 
