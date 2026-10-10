@@ -132,6 +132,7 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 - Replace the deprecated device-registry lookup for repeater parents while retaining compatibility with HA 2025.5
 - Restore fork safeguard coverage using upstream-style AIOSysbus integration setup tests
+- Rebuild the repeater topology (`buildTopology`) only once a day when no repeater is detected (5 min otherwise), and rate-limit retries after a failed topology query instead of retrying every minute
 
 ### 2.6.0.1
 

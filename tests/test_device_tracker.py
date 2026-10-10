@@ -18,7 +18,10 @@ from custom_components.livebox.const import (
     CONF_WIFI_TRACKING,
     DOMAIN,
 )
-from custom_components.livebox.coordinator import TOPOLOGY_SCAN_INTERVAL
+from custom_components.livebox.coordinator import (
+    TOPOLOGY_SCAN_INTERVAL,
+    TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS,
+)
 
 
 @pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
@@ -119,6 +122,7 @@ async def test_device_tracker_creates_missing_repeater_before_via_update(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     AIOSysbus: AsyncMock | MagicMock,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Create a newly discovered repeater before re-parenting its client."""
     client_key = "AA:BB:CC:DD:EE:01"
@@ -159,6 +163,7 @@ async def test_device_tracker_creates_missing_repeater_before_via_update(
             }
         ]
     }
+    freezer.tick(TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
@@ -231,6 +236,7 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     AIOSysbus: AsyncMock | MagicMock,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Re-parent an existing tracker when topology appears on a later refresh."""
     topology = AIOSysbus.topologydiagnostics.async_set_topodiags_build
@@ -251,6 +257,7 @@ async def test_device_tracker_updates_via_device_on_coordinator_refresh(
         if device["Key"] == "DD:DD:DD:DD:DD:01"
     )
     client["IPAddress"] = "192.168.1.99"
+    freezer.tick(TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS)
     await coordinator.async_request_refresh()
     await hass.async_block_till_done()
 
