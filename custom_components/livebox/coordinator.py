@@ -170,7 +170,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             )
             callers, cmissed = await self.async_get_callers()
 
-            await self.async_detect_new_devices(devices)
+            await self.async_detect_new_dvices(devices)
 
             # Persist session for clean logout on restart
             await self.async_persist_session()
@@ -198,7 +198,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 "remote_access": await self.async_is_remote_access(),
                 "topology_via_device": topology_via_device,
                 "topology_repeaters": topology_repeaters,
-                "lan": await self.async_get_lan(),
+                "lan": await self.async_get_lan(devices),
                 "upnp": await self.async_get_port_forwarding(),
                 "dhcp_leases": await self.async_get_dhcp_leases(),
                 "guest_dhcp_leases": await self.async_get_dhcp_leases("guest"),
@@ -476,7 +476,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         ).get("status", {})
         return find_item(veip0, "gpon.veip0", {})
 
-    async def async_get_lan(self):
+    async def async_get_lan(self, lan_devices):
         """Get lan status."""
         self_devices = (
             await self._make_request(
@@ -593,7 +593,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         )
         return ra.get("Enable", False) is True
 
-    async def async_detect_new_devices(self, devices) -> None:
+    async def async_detect_new_dvices(self, devices) -> None:
         """New devices detected."""
         if self.data and self.data.get("devices"):
             for key in devices:

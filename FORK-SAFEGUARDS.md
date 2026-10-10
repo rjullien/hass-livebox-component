@@ -198,9 +198,7 @@ explicitly rather than inferred.
   `LiveboxCallLogCalendar.async_get_events`, handle naive and timezone-aware
   call timestamps, and return a materialized list of events.
 - **Why:** Commit `32b3d54` documents that the cache previously grew
-  indefinitely until a Livebox reboot. The same diff removes a redundant unary
-  plus from the call-end calculation; **Reason: not documented — ask René**
-  for that adjacent cleanup.
+  indefinitely until a Livebox reboot.
 - **Where:** `calendar.py::LiveboxCallLogCalendar.async_get_events`.
 - **Protecting tests:** `tests/test_calendar.py::test_async_get_events_returns_list`
   and `tests/test_calendar.py::test_async_get_events_filters_by_range`.
@@ -211,25 +209,25 @@ explicitly rather than inferred.
   testing rules; do not copy that setup for new safeguard tests, and convert
   these tests to the AIOSysbus integration style if rewriting this file.
 
-### 10. Other small code hunks with no documented rationale
+### 10. Preserve the legacy `unique_id` guard and uptime icon
 
 - **What:** `async_setup_entry` resets a legacy non-string config-entry
-  `unique_id` so setup can repopulate it from the router serial; the
-  coordinator drops the unused `async_get_lan` argument and corrects the
-  `async_detect_new_dvices` spelling; the uptime sensor icon becomes
+  `unique_id` so setup can repopulate it from the router serial; the reset is a
+  no-op when `unique_id` is already a string. The uptime sensor uses the icon
   `mdi:progress-clock`.
-- **Why:** **Reason: not documented — ask René.**
-- **Where:** `__init__.py::async_setup_entry`;
-  `coordinator.py::LiveboxDataUpdateCoordinator._async_update_data`,
-  `async_get_lan`, and `async_detect_new_devices`;
-  `sensor.py` uptime entity description.
+- **Why:** The origin of the legacy non-string `unique_id` reset is
+  undocumented; it is a no-op when `unique_id` is already a string. Preserve
+  the icon's `mdi:` prefix because upstream's `progress-clock` lacks that
+  prefix, so Home Assistant shows no icon.
+- **Where:** `__init__.py::async_setup_entry` and the uptime entity description
+  in `sensor.py`.
 - **Protecting tests:** `tests/test_setup.py::test_setup_entry` and
   `tests/test_setup.py::test_coordinator_refresh` provide general setup/refresh
   coverage, but no targeted test was found for these individual hunks.
-- **Merge pitfalls:** Keep the `async_get_lan` call and signature aligned, and
-  update both the renamed coordinator method and its caller together. Confirm
-  the legacy `unique_id` migration and icon change before dropping them; their
-  rationale is not recorded in the reviewed changelog or commit messages.
+- **Merge pitfalls:** Keep the legacy reset guarded so already-string IDs are
+  unaffected, and retain the `mdi:` icon prefix. Keep coordinator method
+  spelling, signatures, and expressions aligned with upstream unless a
+  behavior or compatibility fix requires a documented fork difference.
 
 ### 11. Fork metadata and tooling / CI
 
@@ -239,7 +237,7 @@ explicitly rather than inferred.
   `aiosysbus==1.2.5`, requires `pytest-homeassistant-custom-component>=0.13.346`,
   and targets Ruff at Python 3.13; `uv.lock` records those dependency and lock
   format updates. The manifest points code ownership, documentation, and issue
-  tracking at the fork and carries version `2.6.0.2`. README records fork
+  tracking at the fork and carries version `2.6.0.3`. README records fork
   status, versioning, and changelog.
 - **Why:** The README 2.5.4.2 changelog documents the modern development stack,
   lockfile compatibility, and four-part versioning. README 2.5.6.1 explains
@@ -265,7 +263,9 @@ explicitly rather than inferred.
 2. Rebase the fork commits onto the new upstream release tag, rather than
    merging upstream. This keeps GitHub Compare and ForkUpstreamMonitor at
    `behind_by=0`. Re-apply any safeguard that upstream did not take, resolving
-   conflicts against the inventory above.
+   conflicts against the inventory above. Avoid cosmetic-only divergence:
+   preserve upstream expressions, method names, and signatures unless a
+   behavior or compatibility fix justifies a fork-specific difference.
 3. Set the integration version to `X.Y.Z.N`: use the new upstream
    `X.Y.Z` base and reset fork revision `N` to `.1`. Update the README **Fork
    status** and add the fork changelog entry.
@@ -284,6 +284,7 @@ explicitly rather than inferred.
    CMake must be installed for `pycares` during `uv sync`. Require the complete
    test suite to pass with coverage at or above 85%; run both pytest and prek
    before updating the branch.
+
 6. Check the safeguard symbols and test names after the rebase. For example:
 
    ```bash
@@ -292,6 +293,7 @@ explicitly rather than inferred.
 
    Also confirm the protecting test names listed above still exist and update
    this inventory if behavior or test names changed.
+
 7. Confirm GitHub Compare/ForkUpstreamMonitor reports `behind_by=0`. Only after
    checks pass, force-push the rebased `master` (prefer
    `git push --force-with-lease origin master`).
