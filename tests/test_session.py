@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import ClientSession
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 
 from custom_components.livebox.session import (
     LiveboxSessionStore,
@@ -23,11 +25,19 @@ class _FakeResponse:
     def __init__(self, status: int) -> None:
         self.status = status
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> _FakeResponse:
         return self
 
     async def __aexit__(self, *args):
         pass
+
+
+def _set_mock_session(AIOSysbus: AsyncMock | MagicMock) -> None:
+    """Set session credentials on the mocked router client."""
+    AIOSysbus._auth.session_token = "session-context"
+    AIOSysbus._auth._cookies = {"SESSIONID": "session-cookie"}
+    AIOSysbus._auth.base_url = "http://192.168.1.1/ws"
+    AIOSysbus._auth.verify_tls = False
 
 
 @pytest.mark.parametrize("status", [200, 301, 302, 307])
@@ -158,6 +168,39 @@ async def test_store_clear(hass) -> None:
     assert store.has_session is False
     assert store.cookies == {}
     assert store.context_id is None
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_coordinator_persists_only_changed_session(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """Repeated updates save stable credentials once and save changed ones again."""
+    _set_mock_session(AIOSysbus)
+
+    with patch.object(
+        LiveboxSessionStore, "async_save", new_callable=AsyncMock
+    ) as mock_save:
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = config_entry.runtime_data
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        mock_save.assert_awaited_once()
+
+        AIOSysbus._auth.session_token = "updated-session-context"
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+        assert mock_save.await_count == 2
+        assert mock_save.await_args_list[-1].kwargs["context_id"] == (
+            "updated-session-context"
+        )
 
 
 async def test_store_verify_tls_default(hass) -> None:
