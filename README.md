@@ -7,7 +7,7 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.6.0** (commit `30c75a0`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
+> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.6.0** (commit `30c75a0`), fork release **2.6.0.3**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
 >
 > **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.6.0.1` = upstream 2.6.0, fork rev 1).
 >
@@ -127,6 +127,10 @@ Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/ha
 Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
 
 ## Changelog (fork)
+
+### 2.6.0.3
+
+- Realign cosmetic hunks with upstream, no behaviour change
 
 ### 2.6.0.2
 
