@@ -1,7 +1,5 @@
 """Tests for the Bbox sensor platform."""
 
-from types import SimpleNamespace
-from typing import Any
 from unittest.mock import AsyncMock
 
 import homeassistant.helpers.device_registry as dr
@@ -10,14 +8,10 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfDataRate, UnitOfInformation
 from homeassistant.core import HomeAssistant, State
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.livebox.const import DOMAIN
-from custom_components.livebox.coordinator import LiveboxDataUpdateCoordinator
-from custom_components.livebox.sensor import (
-    SENSOR_TYPES,
-    LiveboxSensor,
-    LiveboxSensorEntityDescription,
-)
+from custom_components.livebox.sensor import SENSOR_TYPES
 
 from .helpers import load_fixture
 
@@ -171,100 +165,107 @@ async def test_rate_sensors_use_megabits_per_second_math(
     assert float(tx_state.state) == 5.69
 
 
-def _make_rolling_sensor(
-    data: dict[str, Any],
-    rolling_data_path: str,
-    coordinator_unique_id: str = "test_box",
-) -> LiveboxSensor:
-    """Build a minimal LiveboxSensor wired to a stub coordinator."""
-    coordinator = object.__new__(LiveboxDataUpdateCoordinator)
-    coordinator.unique_id = coordinator_unique_id
-    coordinator.data = data
-    coordinator.config_entry = SimpleNamespace(
-        data={"use_tls": False, "host": "192.168.1.1", "port": 80},
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_rolling_32bit_two_independent_instances_do_not_share_state(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock,
+) -> None:
+    """Fiber counters on separate Liveboxes should accumulate independently."""
+    device_info = AIOSysbus.api_raw["DeviceInfo.async_get_deviceinfo"]["status"]
+    fiber_stats = AIOSysbus.api_raw["NeMo.async_get_net_dev_stats::veip0"]["status"]
+    device_info["UpTime"] = 100
+    fiber_stats["RxBytes"] = (1 << 32) - 10
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    first_serial = config_entry.runtime_data.unique_id
+
+    second_serial = "SECOND-LIVEBOX"
+    device_info["SerialNumber"] = second_serial
+    fiber_stats["RxBytes"] = 100
+    second_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            **config_entry.data,
+            "host": "192.168.1.2",
+            "username": "192.168.1.2",
+        },
+        options=dict(config_entry.options),
+        unique_id=second_serial,
+    )
+    second_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(second_entry.entry_id)
+    await hass.async_block_till_done()
+
+    entity_registry = er.async_get(hass)
+
+    def _fiber_rx_value(serial: str) -> tuple[float, str]:
+        entity_id = entity_registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{serial}_fiber_rx"
+        )
+        assert entity_id is not None
+        state = hass.states.get(entity_id)
+        assert state is not None
+        return float(state.state), state.attributes["unit_of_measurement"]
+
+    second_value, unit = _fiber_rx_value(second_serial)
+    assert unit == UnitOfInformation.GIGABYTES
+    assert second_value == pytest.approx(100 / 1_000_000_000, abs=0.01)
+
+    device_info["SerialNumber"] = first_serial
+    device_info["UpTime"] = 110
+    fiber_stats["RxBytes"] = 5
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    first_value, unit = _fiber_rx_value(first_serial)
+    assert unit == UnitOfInformation.GIGABYTES
+    assert first_value == pytest.approx(((1 << 32) + 5) / 1_000_000_000, abs=0.01)
+    second_value, _ = _fiber_rx_value(second_serial)
+    assert second_value == pytest.approx(100 / 1_000_000_000, abs=0.01)
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_rolling_32bit_resets_on_router_reboot(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock,
+) -> None:
+    """A reboot resets the accumulated counter after rollover."""
+    device_info = AIOSysbus.api_raw["DeviceInfo.async_get_deviceinfo"]["status"]
+    fiber_stats = AIOSysbus.api_raw["NeMo.async_get_net_dev_stats::veip0"]["status"]
+    device_info["UpTime"] = 500
+    fiber_stats["RxBytes"] = (1 << 32) - 10
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    serial = config_entry.runtime_data.unique_id
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "sensor", DOMAIN, f"{serial}_fiber_rx"
+    )
+    assert entity_id is not None
+
+    device_info["UpTime"] = 510
+    fiber_stats["RxBytes"] = 5
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.attributes["unit_of_measurement"] == UnitOfInformation.GIGABYTES
+    assert float(state.state) == pytest.approx(
+        ((1 << 32) + 5) / 1_000_000_000, abs=0.01
     )
 
-    description = LiveboxSensorEntityDescription(
-        key=f"test_{rolling_data_path.replace('.', '_')}",
-        rolling_data_path=rolling_data_path,
-    )
+    device_info["UpTime"] = 10
+    fiber_stats["RxBytes"] = 100_000_000
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
 
-    sensor = object.__new__(LiveboxSensor)
-    sensor.coordinator = coordinator
-    sensor.entity_description = description
-    sensor._rolling_prev_reading = 0
-    sensor._rolling_prev_uptime = 0
-    sensor._rolling_rolls = 0
-    return sensor
-
-
-def test_rolling_32bit_two_independent_instances_do_not_share_state() -> None:
-    """Two LiveboxSensor instances must accumulate rollover independently.
-
-    Regression guard for item 2a: previously `get_rolling_32_bit_value_fn` created
-    module-level closures stored in SENSOR_TYPES. With two Livebox boxes configured,
-    the same closure was reused, corrupting both counters. State must now live on
-    the entity instance.
-    """
-
-    # Data scaffold: uptime + the counter path used by each sensor
-    def _data(uptime: int, rx_bytes: int) -> dict[str, Any]:
-        return {
-            "infos": {"UpTime": uptime},
-            "fiber_stats": {"RxBytes": rx_bytes},
-        }
-
-    sensor_box1 = _make_rolling_sensor(_data(100, 0), "fiber_stats.RxBytes", "box1")
-    sensor_box2 = _make_rolling_sensor(_data(100, 0), "fiber_stats.RxBytes", "box2")
-
-    # --- Simulate a near-rollover on box1 ---
-    # Feed box1 a value just under 2^32
-    high_value = (1 << 32) - 10
-    sensor_box1.coordinator.data = _data(100, high_value)
-    assert sensor_box1.native_value == high_value
-
-    # --- box2 starts fresh and receives a small counter ---
-    sensor_box2.coordinator.data = _data(100, 50)
-    assert sensor_box2.native_value == 50  # must NOT be inflated by box1's roll count
-
-    # --- Trigger the actual 32-bit rollover on box1 ---
-    after_rollover = 5  # the counter wrapped: new reading is 5
-    sensor_box1.coordinator.data = _data(110, after_rollover)
-    box1_value = sensor_box1.native_value
-    # After one roll: (1 << 32) + 5
-    assert box1_value == (1 << 32) + after_rollover
-
-    # --- box2 must be completely unaffected ---
-    # It should see its own counter advancing normally with no roll offset
-    sensor_box2.coordinator.data = _data(110, 100)
-    box2_value = sensor_box2.native_value
-    assert box2_value == 100  # no spurious roll inherited from box1
-    assert box1_value != box2_value
-
-
-def test_rolling_32bit_resets_on_router_reboot() -> None:
-    """Rolling counter must reset to zero when uptime decreases (router reboot)."""
-
-    def _data(uptime: int, rx_bytes: int) -> dict[str, Any]:
-        return {
-            "infos": {"UpTime": uptime},
-            "wifi_stats": {"RxBytes": rx_bytes},
-        }
-
-    sensor = _make_rolling_sensor(_data(500, 1000), "wifi_stats.RxBytes")
-
-    # Advance the counter normally
-    sensor.coordinator.data = _data(500, 1000)
-    assert sensor.native_value == 1000
-
-    sensor.coordinator.data = _data(600, 2000)
-    assert sensor.native_value == 2000
-
-    # Simulate reboot: uptime dropped below previous
-    sensor.coordinator.data = _data(10, 50)
-    assert sensor.native_value == 50  # state reset; no carry-over from pre-reboot
-    assert sensor._rolling_rolls == 0
-    assert sensor._rolling_prev_reading == 50
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert float(state.state) == pytest.approx(0.1, abs=0.01)
 
 
 @pytest.mark.usefixtures("entity_registry_enabled_by_default")

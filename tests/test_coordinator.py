@@ -1,5 +1,6 @@
 """Tests for the Livebox coordinator."""
 
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -14,6 +15,29 @@ from custom_components.livebox.coordinator import TOPOLOGY_SCAN_INTERVAL
 from .helpers import load_fixture
 
 ISSUE_191 = "issue_191_repeater_topology_sanitized.json"
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_unknown_product_class_logs_warning_and_sets_model_none(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An unknown ProductClass should not prevent integration setup."""
+    product_class = "Livebox Unknown"
+    AIOSysbus.api_raw["DeviceInfo.async_get_deviceinfo"]["status"]["ProductClass"] = (
+        product_class
+    )
+
+    with caplog.at_level(
+        logging.WARNING, logger="custom_components.livebox.coordinator"
+    ):
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert config_entry.runtime_data.model is None
+    assert f"Unknown Livebox ProductClass: {product_class}" in caplog.text
 
 
 async def _async_setup(hass: HomeAssistant, config_entry: ConfigEntry) -> Any:

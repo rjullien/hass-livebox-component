@@ -114,6 +114,99 @@ def _device(hass: HomeAssistant, entry: ConfigEntry, key: str) -> dr.DeviceEntry
     return device
 
 
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_device_tracker_creates_missing_repeater_before_via_update(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """Create a newly discovered repeater before re-parenting its client."""
+    client_key = "AA:BB:CC:DD:EE:01"
+    repeater_key = "CC:DD:EE:FF:00:01"
+    AIOSysbus.__devices["status"].append(
+        {
+            "Key": client_key,
+            "Name": "Topology Test Client",
+            "PhysAddress": client_key,
+            "IPAddress": "192.168.1.50",
+            "Active": True,
+            "Tags": "lan edev mac physical ipv4 ipv6 dhcp wifi",
+        }
+    )
+    topology = AIOSysbus.topologydiagnostics
+    topology.async_get_topodiags.return_value = {"status": {}}
+    topology.async_set_topodiags_build.return_value = {"status": []}
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = config_entry.runtime_data
+    livebox = _device(hass, config_entry, cast(str, coordinator.unique_id))
+    client = _device(hass, config_entry, client_key)
+    assert client.via_device_id == livebox.id
+
+    topology.async_set_topodiags_build.return_value = {
+        "status": [
+            {
+                "Key": "HGW",
+                "Children": [
+                    {
+                        "Key": repeater_key,
+                        "Name": "New Repeater",
+                        "SSW": {"CurrentMode": "Slave"},
+                        "Children": [{"Key": client_key, "PhysAddress": client_key}],
+                    }
+                ],
+            }
+        ]
+    }
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    repeater = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, repeater_key), config_entry.entry_id
+    )
+    assert repeater is not None
+    assert _device(hass, config_entry, client_key).via_device_id == repeater.id
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_device_tracker_keeps_parent_when_topology_parent_is_unknown(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """Keep the current parent when topology points to an unknown device."""
+    client_key = "AA:BB:CC:DD:EE:02"
+    AIOSysbus.__devices["status"].append(
+        {
+            "Key": client_key,
+            "Name": "Unknown Parent Client",
+            "PhysAddress": client_key,
+            "IPAddress": "192.168.1.51",
+            "Active": True,
+            "Tags": "lan edev mac physical ipv4 ipv6 dhcp wifi",
+        }
+    )
+    topology = AIOSysbus.topologydiagnostics
+    topology.async_get_topodiags.return_value = {"status": {}}
+    topology.async_set_topodiags_build.return_value = {"status": []}
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    coordinator = config_entry.runtime_data
+    livebox = _device(hass, config_entry, cast(str, coordinator.unique_id))
+
+    with patch.object(
+        coordinator,
+        "get_parent_device_identifier",
+        return_value=(DOMAIN, "unknown-parent"),
+    ):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    assert _device(hass, config_entry, client_key).via_device_id == livebox.id
+
+
 @pytest.mark.usefixtures("AIOSysbus")
 @pytest.mark.parametrize("api_overlay", [ISSUE_191], indirect=True)
 async def test_device_tracker_links_clients_to_repeaters(
