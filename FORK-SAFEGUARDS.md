@@ -12,8 +12,9 @@ explicitly rather than inferred.
 ### 1. Persist, release, and recover Livebox sessions
 
 - **What:** Persist each entry's session cookies, context ID, base URL, and TLS
-  verification setting after successful polling. Log out when an entry unloads,
-  and attempt to release a persisted orphan before setting up a new session.
+  verification setting after successful polling, but write only when that
+  tuple changes. Log out when an entry unloads, and attempt to release a
+  persisted orphan before setting up a new session.
   On a top-level `HttpRequestFailed`, clear the in-memory session token so the
   next polling cycle can authenticate again.
 - **Why:** The Livebox has a limited session table. Orphaned sessions otherwise
@@ -31,6 +32,7 @@ explicitly rather than inferred.
   `test_logout_session_verify_tls_false`, `test_logout_session_failure_status`,
   `test_logout_session_exception`, `test_logout_session_multiple_cookies`,
   `test_store_save_load_roundtrip`, `test_store_clear`,
+  `test_coordinator_persists_only_changed_session`,
   `test_store_verify_tls_default`, `test_unload_calls_logout`,
   `test_unload_no_runtime_data`, and `test_orphan_cleanup_on_boot`.
 - **Merge pitfalls:** Keep storage scoped to the config entry and preserve the

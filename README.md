@@ -133,6 +133,7 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 - Realign cosmetic hunks with upstream
 - Call-log calendar realigned with upstream (30-day pruning removed)
 - Rolling 32-bit counters realigned with upstream (per-entity state removed)
+- Session credentials are written to storage only when they change, not on every poll
 
 ### 2.6.0.2
 
