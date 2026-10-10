@@ -281,7 +281,15 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
             # New repeaters may still be awaiting entity setup in the same
             # refresh that first exposes topology_via_device. Ensure the
             # parent exists before linking, otherwise HA rejects via_device.
-            if registry.async_get_device(identifiers={via_device}) is None:
+            get_by_identifier = getattr(
+                registry, "async_get_device_by_identifier", None
+            )
+            parent = (
+                get_by_identifier(via_device, self.coordinator.config_entry.entry_id)
+                if get_by_identifier is not None
+                else registry.async_get_device(identifiers={via_device})
+            )
+            if parent is None:
                 repeater_name = self.coordinator.data.get("topology_repeaters", {}).get(
                     via_device[1]
                 )
