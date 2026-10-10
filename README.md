@@ -132,6 +132,7 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 - Realign cosmetic hunks with upstream
 - Call-log calendar realigned with upstream (30-day pruning removed)
+- Rolling 32-bit counters realigned with upstream (per-entity state removed)
 
 ### 2.6.0.2
 
@@ -189,3 +190,9 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 negligible (a few hundred bytes per call), the cache is cleared on reboot, and
 the owner's line receives practically no calls. The 30-day pruning was removed
 in 2.6.0.3 to avoid diverging from upstream; do not re-add it.
+
+### Rolling 32-bit counters
+
+Rolling counter state is shared across config entries, so totals can be wrong
+when two or more Liveboxes are configured in the same Home Assistant. The owner
+has one Livebox, so this is accepted to avoid diverging from upstream.

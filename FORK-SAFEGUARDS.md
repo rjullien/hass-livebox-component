@@ -47,24 +47,21 @@ explicitly rather than inferred.
   best-effort logout warning is harmless when data starts flowing immediately
   afterward; do not mistake the warning alone for a failed integration setup.
 
-### 2. Keep rolling 32-bit counters independent
+### 2. Rolling 32-bit counter isolation (removed in 2.6.0.3)
 
-- **What:** Fiber and Wi-Fi byte counters accumulate across 32-bit wraparound.
-  Previous reading, uptime, and wrap count live on each `LiveboxSensor`
-  instance, so entities and separate Liveboxes do not share state. A decrease
-  in router uptime resets accumulated state after a reboot.
-- **Why:** Commit `ea25a04` records that module-level closures were shared
-  through `SENSOR_TYPES`, corrupting counters when multiple boxes were
-  configured. The README changelog also documents per-instance counters for
-  multi-box setups and reboot reset behavior.
-- **Where:** `sensor.py::LiveboxSensorEntityDescription`,
-  `LiveboxSensor.__init__`, `LiveboxSensor._compute_rolling_32_bit`, and
-  `LiveboxSensor.native_value`.
-- **Protecting tests:** `tests/test_sensor.py::test_rolling_32bit_two_independent_instances_do_not_share_state`
-  and `tests/test_sensor.py::test_rolling_32bit_resets_on_router_reboot`.
-- **Merge pitfalls:** Do not move the state back into a module-level
-  `value_fn` closure: entities from separate config entries would share it
-  again. Keep the uptime-decrease reset as well as the rollover accumulation.
+- **Status:** The per-entity state safeguard was removed in 2.6.0.3.
+  Upstream's module-level closures are accepted; do not re-add per-entity
+  state or the fork-only multi-box tests.
+- **Known issue:** The closures in `SENSOR_TYPES` share rolling state across
+  config entries, so totals can be wrong with two or more Liveboxes in one
+  Home Assistant. René has one Livebox and accepts this to avoid divergence;
+  see README's "Known issues (accepted)" section.
+- **Where:** `sensor.py::get_rolling_32_bit_value_fn` and `SENSOR_TYPES` retain
+  upstream behavior.
+- **Protecting tests:** None; the fork-only rolling-counter tests were removed
+  in 2.6.0.3.
+- **Merge pitfalls:** Leave upstream's module-level closures unchanged. Do not
+  restore per-entity state or tests when syncing upstream.
 
 ### 3. Preserve WAN access switch identity and manual override semantics
 
@@ -286,7 +283,7 @@ explicitly rather than inferred.
 6. Check the safeguard symbols and test names after the rebase. For example:
 
    ```bash
-   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_compute_rolling_32_bit|_migrate_wan_access_unique_ids|_async_turn_on_guest_wifi_fibre|_async_turn_off_guest_wifi_fibre|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Unknown Livebox ProductClass|Funbox6|normalize_display_devices|normalize_options' custom_components/livebox
+   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_migrate_wan_access_unique_ids|_async_turn_on_guest_wifi_fibre|_async_turn_off_guest_wifi_fibre|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Unknown Livebox ProductClass|Funbox6|normalize_display_devices|normalize_options' custom_components/livebox
    ```
 
    Also confirm the protecting test names listed above still exist and update
