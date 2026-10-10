@@ -7,7 +7,7 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.6.0** (commit `30c75a0`). Fork-specific improvements (session logout/persistence, multi-box counters, WAN access fixes, guest WiFi fix) are preserved on top.
+> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.6.0** (commit `30c75a0`), fork release **2.6.0.3**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
 >
 > **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.6.0.1` = upstream 2.6.0, fork rev 1).
 >
@@ -128,6 +128,19 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ## Changelog (fork)
 
+### 2.6.0.4
+
+- Session logout now uses the web UI method (`X-Sah-Logout` + `releaseContext`); `/logout.cmd` returned 404 on Livebox Fibre
+
+### 2.6.0.3
+
+- Realign cosmetic hunks with upstream
+- Call-log calendar realigned with upstream (30-day pruning removed)
+- Rolling 32-bit counters realigned with upstream (per-entity state removed)
+- Session credentials are written to storage only when they change, not on every poll
+- Fibre guest Wi-Fi controls realigned with upstream; pinned aiosysbus handles timer calls
+- Unknown ProductClass warning removed to match upstream
+
 ### 2.6.0.2
 
 - Replace the deprecated device-registry lookup for repeater parents while retaining compatibility with HA 2025.5
@@ -175,3 +188,23 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
   - WAN access unique_id migration (#287)
   - Guest WiFi turn_off fix for Livebox Fibre
   - Reconfigure flow, device sensors, eth interfaces (from upstream)
+
+## Known issues (accepted)
+
+### Call-log calendar cache
+
+`LiveboxCallLogCalendar._calls` grows until the Livebox reboots. The impact is
+negligible (a few hundred bytes per call), the cache is cleared on reboot, and
+the owner's line receives practically no calls. The 30-day pruning was removed
+in 2.6.0.3 to avoid diverging from upstream; do not re-add it.
+
+### Rolling 32-bit counters
+
+Rolling counter state is shared across config entries, so totals can be wrong
+when two or more Liveboxes are configured in the same Home Assistant. The owner
+has one Livebox, so this is accepted to avoid diverging from upstream.
+
+### Unknown Livebox ProductClass
+
+An unrecognized `ProductClass` leaves `model` unset without a warning. This is
+accepted to stay aligned with upstream.

@@ -31,6 +31,7 @@ from .const import (
     DOMAIN,
 )
 from .helpers import find_item, normalize_display_devices
+from .session import LiveboxSessionStore, async_logout_session
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=1)
@@ -51,6 +52,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=SCAN_INTERVAL)
         self.config_entry: Any = config_entry
         self.api: Any
+        self._persisted_session: tuple[str, dict[str, str], str, bool] | None = None
 
         self.unique_id: str | None = None
         self.model: int | float | None = None
@@ -71,40 +73,53 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_persist_session(self) -> None:
         """Save current session credentials to storage for logout on restart."""
-        from .session import LiveboxSessionStore
-
         try:
             auth = self.api._auth
             token = auth.session_token
             cookies = auth._cookies
             # Only persist if we have real string values (not mocks)
             if isinstance(token, str) and isinstance(cookies, dict) and cookies:
-                base_url = str(auth.base_url)
-                verify_tls = getattr(auth, "verify_tls", True)
+                session = (
+                    token,
+                    {str(key): str(value) for key, value in cookies.items()},
+                    str(auth.base_url),
+                    bool(getattr(auth, "verify_tls", True)),
+                )
+                if session == self._persisted_session:
+                    return
+
                 store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
                 await store.async_save(
-                    cookies={str(k): str(v) for k, v in cookies.items()},
-                    context_id=token,
-                    base_url=base_url,
-                    verify_tls=bool(verify_tls),
+                    cookies=session[1],
+                    context_id=session[0],
+                    base_url=session[2],
+                    verify_tls=session[3],
                 )
+                self._persisted_session = session
         except Exception:  # noqa: BLE001
             _LOGGER.debug("Failed to persist session", exc_info=True)
 
     async def async_logout(self) -> None:
         """Logout from the Livebox to release the API session slot."""
-        from .session import LiveboxSessionStore, async_logout_session
+        self._persisted_session = None
 
         try:
             auth = self.api._auth
+            token = auth.session_token
             cookies = auth._cookies
-            if isinstance(cookies, dict) and cookies:
+            if (
+                isinstance(token, str)
+                and token
+                and isinstance(cookies, dict)
+                and cookies
+            ):
                 session = async_get_clientsession(self.hass)
                 base_url = str(auth.base_url)
                 verify_tls = getattr(auth, "verify_tls", True)
                 success = await async_logout_session(
                     session,
                     base_url,
+                    token,
                     {str(k): str(v) for k, v in cookies.items()},
                     verify_tls=bool(verify_tls),
                 )
@@ -154,9 +169,6 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                     self.model = 7.2
                 case "Funbox6":
                     self.model = 6.1  # SagemcomFast5670_OPL
-                case _:
-                    _LOGGER.warning("Unknown Livebox ProductClass: %s", product_class)
-                    self.model = None
             # Optionals
             wifi_tracking = self.config_entry.options.get(
                 CONF_WIFI_TRACKING, DEFAULT_WIFI_TRACKING
@@ -170,7 +182,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             )
             callers, cmissed = await self.async_get_callers()
 
-            await self.async_detect_new_devices(devices)
+            await self.async_detect_new_dvices(devices)
 
             # Persist session for clean logout on restart
             await self.async_persist_session()
@@ -198,7 +210,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 "remote_access": await self.async_is_remote_access(),
                 "topology_via_device": topology_via_device,
                 "topology_repeaters": topology_repeaters,
-                "lan": await self.async_get_lan(),
+                "lan": await self.async_get_lan(devices),
                 "upnp": await self.async_get_port_forwarding(),
                 "dhcp_leases": await self.async_get_dhcp_leases(),
                 "guest_dhcp_leases": await self.async_get_dhcp_leases("guest"),
@@ -476,7 +488,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         ).get("status", {})
         return find_item(veip0, "gpon.veip0", {})
 
-    async def async_get_lan(self):
+    async def async_get_lan(self, lan_devices):
         """Get lan status."""
         self_devices = (
             await self._make_request(
@@ -593,7 +605,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         )
         return ra.get("Enable", False) is True
 
-    async def async_detect_new_devices(self, devices) -> None:
+    async def async_detect_new_dvices(self, devices) -> None:
         """New devices detected."""
         if self.data and self.data.get("devices"):
             for key in devices:
