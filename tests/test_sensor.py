@@ -1,5 +1,7 @@
 """Tests for the Bbox sensor platform."""
 
+from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import homeassistant.helpers.device_registry as dr
@@ -8,9 +10,6 @@ import pytest
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfDataRate, UnitOfInformation
 from homeassistant.core import HomeAssistant, State
-
-from types import SimpleNamespace
-from typing import Any
 
 from custom_components.livebox.const import DOMAIN
 from custom_components.livebox.coordinator import LiveboxDataUpdateCoordinator
