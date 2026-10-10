@@ -17,6 +17,15 @@ explicitly rather than inferred.
   persisted orphan before setting up a new session.
   On a top-level `HttpRequestFailed`, clear the in-memory session token so the
   next polling cycle can authenticate again.
+- **Logout mechanism:** POST to the stored `/ws` URL with the session cookies,
+  `Authorization: X-Sah-Logout <context_id>`, content type
+  `application/x-sah-ws-1-call+json`, and a `releaseContext` request for
+  `sah.Device.Information` with application name `so_sdkut`. Success requires
+  HTTP 200 and JSON `{"status": 0}`.
+- **Verification:** Confirmed on a Livebox Fibre running firmware
+  `ARFI-fr-G06.R06.C01_12` on 2026-10-10. The web UI's logout request releases
+  the context; a subsequent call using it returns error 13. Using a normal
+  `X-Context` header returns error 196618.
 - **Why:** The Livebox has a limited session table. Orphaned sessions otherwise
   remain until timeout; repeated HA restarts/reloads can exhaust the table and
   make the API stop responding. This is documented by commit `f37b631` (issue
@@ -28,21 +37,26 @@ explicitly rather than inferred.
   `LiveboxDataUpdateCoordinator._async_update_data`;
   `__init__.py::_async_logout_orphaned_session`,
   `async_setup_entry`, and `async_unload_entry`.
-- **Protecting tests:** `tests/test_session.py::test_logout_session_success_statuses`,
-  `test_logout_session_verify_tls_false`, `test_logout_session_failure_status`,
-  `test_logout_session_exception`, `test_logout_session_multiple_cookies`,
+- **Protecting tests:** `tests/test_session.py::test_logout_session_success`,
+  `test_logout_session_failure_payload`, `test_logout_session_failure_status`,
+  `test_logout_session_exception`, `test_logout_session_non_json`,
+  `test_logout_session_missing_context_id`,
   `test_store_save_load_roundtrip`, `test_store_clear`,
   `test_coordinator_persists_only_changed_session`,
+  `test_unload_logout_uses_credentials_only`,
   `test_store_verify_tls_default`, `test_unload_calls_logout`,
   `test_unload_no_runtime_data`, and `test_orphan_cleanup_on_boot`.
-- **Merge pitfalls:** Keep storage scoped to the config entry and preserve the
-  TLS setting for orphan logout. Stop platform polling before logging out on
-  unload. Keep token invalidation in the top-level update failure path; the
-  `f37b631` commit explains that clearing it for every endpoint failure can
-  trigger a login storm during one polling cycle. The current tests do not
-  directly assert `async_persist_session` or token invalidation after
-  `HttpRequestFailed`; preserve those paths when changing coordinator error
-  handling.
+- **Merge pitfalls:** Do not revert to `/logout.cmd`; it returned HTTP 404 on
+  Livebox Fibre. Preserve the `X-Sah-Logout` header and `releaseContext` body,
+  and pass the stored context ID with the cookies and TLS setting for orphan
+  logout. Keep storage scoped to the config entry. Stop platform polling
+  before logging out on unload. Keep token invalidation in the top-level
+  update failure path; the `f37b631` commit explains that clearing it for every
+  endpoint failure can trigger a login storm during one polling cycle. The
+  current tests do not directly assert token invalidation after
+  `HttpRequestFailed`; the persistence optimization is exercised by
+  `test_coordinator_persists_only_changed_session`. Preserve both paths when
+  changing coordinator error handling.
 
   **Operational note:** On René's real Livebox, startup can log
   `Failed to logout orphaned session (Livebox may be unreachable)`. This

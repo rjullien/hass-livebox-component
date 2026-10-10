@@ -96,6 +96,7 @@ async def _async_logout_orphaned_session(
         success = await async_logout_session(
             session,
             store.base_url or "",
+            store.context_id,
             store.cookies,
             verify_tls=store.verify_tls,
         )
