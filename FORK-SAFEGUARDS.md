@@ -7,6 +7,8 @@ comparison. Reasons are grounded in the fork changelog, commit history, linked
 issues, or owner-provided operating context; anything not documented is marked
 explicitly rather than inferred.
 
+See the README's [Upstream contributions](README.md#upstream-contributions) section for current proposals and status.
+
 ## Safeguard inventory
 
 ### 1. Persist, release, and recover Livebox sessions
