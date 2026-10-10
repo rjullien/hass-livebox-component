@@ -128,6 +128,10 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ## Changelog (fork)
 
+### 2.6.0.4
+
+- Session logout now uses the web UI method (`X-Sah-Logout` + `releaseContext`); `/logout.cmd` returned 404 on Livebox Fibre
+
 ### 2.6.0.3
 
 - Realign cosmetic hunks with upstream
