@@ -85,24 +85,19 @@ explicitly rather than inferred.
   `30c75a0..origin/master`. Keep them when resolving a later upstream conflict,
   but do not blindly replay or duplicate changes already in the new base.
 
-### 4. Use the Fibre-specific guest Wi-Fi controls
+### 4. Fibre guest Wi-Fi helpers (removed in 2.6.0.3)
 
-- **What:** For Livebox Fibre, turn-on uses `async_set_guest_wifi(enable=True)`
-  followed by `async_set_wlan_timer`; turn-off uses
-  `async_set_guest_wifi(enable=False)` followed by
-  `async_disable_wlan_timer`.
-- **Why:** Commit `8562e6f` says the Fibre helpers were lost in a rebase and
-  restores them because the generic `async_guest_wifi` path has a timer bug.
-  The README changelog records the Fibre turn-off fix.
-- **Where:** `switch.py::_async_turn_on_guest_wifi_fibre`,
-  `switch.py::_async_turn_off_guest_wifi_fibre`, and `SWITCH_TYPES_5`;
-  `tests/conftest.py::mock_router` supplies the API mocks.
-- **Protecting tests:** `tests/test_switch.py::test_switch_guest_wifi_fibre_turn_off`.
-  The test exercises turn-off; it does not separately assert the Fibre turn-on
-  timer call.
-- **Merge pitfalls:** Do not replace these Fibre-specific actions with the
-  generic `async_guest_wifi` call. In this comparison, `helpers.py` changes
-  only for display-option normalization; the Fibre helpers are in `switch.py`.
+- **Status:** The fork-only helpers were removed in 2.6.0.3; keep upstream's
+  `async_guest_wifi` callbacks in `SWITCH_TYPES_5`.
+- **Why:** With pinned aiosysbus 1.2.5, `NMC.async_guest_wifi` makes the same
+  calls: `set_guest_wifi` plus `set_wlan_timer(0, "guest")` on enable, and
+  `disable_wlan_timer("guest")` on disable. The helpers only worked around an
+  older aiosysbus and are no longer needed.
+- **Where:** `switch.py::SWITCH_TYPES_5`.
+- **Protecting tests:** None; the fork-only
+  `test_switch_guest_wifi_fibre_turn_off` test was removed in 2.6.0.3.
+- **Merge pitfalls:** Do not re-add the Fibre helpers; retain the upstream
+  callbacks, which include the timer operations in the pinned aiosysbus.
 
 ### 5. Keep repeater parent links valid and compatible with HA 2025.5
 
@@ -130,20 +125,20 @@ explicitly rather than inferred.
   about removing vanished devices is deferred work, not a reason to discard
   the current parent-link behavior.
 
-### 6. Warn on unknown ProductClass without losing Funbox6
+### 6. Unknown ProductClass fallback (removed in 2.6.0.3)
 
-- **What:** Map upstream `Funbox6` to model `6.1`; for any other unknown
-  `ProductClass`, log a warning and set `model` to `None` rather than failing
-  setup.
-- **Why:** The README 2.6.0.1 changelog explicitly says to keep the upstream
-  Funbox6 mapping alongside the fork's unknown-ProductClass fallback warning.
-- **Where:** `coordinator.py::LiveboxDataUpdateCoordinator._async_update_data`,
-  in the ProductClass match.
-- **Protecting tests:** `tests/test_coordinator.py::test_unknown_product_class_logs_warning_and_sets_model_none`
-  covers the fallback. No test found directly asserting the `Funbox6` → `6.1`
-  mapping; add one if that mapping is changed during a sync.
-- **Merge pitfalls:** Do not replace the `Funbox6` case with the fallback, or
-  make unknown models fatal. Keep the warning visible for diagnosis.
+- **Status:** The unknown-ProductClass warning and fallback were removed in
+  2.6.0.3; retain upstream's `Funbox6` → `6.1` mapping.
+- **Known issue:** An unknown `ProductClass` leaves `model` unset silently.
+  This is accepted to stay aligned with upstream; see README's "Known issues
+  (accepted)" section.
+- **Where:** `coordinator.py::LiveboxDataUpdateCoordinator._async_update_data`;
+  the `Funbox6` case remains upstream behavior.
+- **Protecting tests:** None; the fork-only
+  `test_unknown_product_class_logs_warning_and_sets_model_none` test was
+  removed in 2.6.0.3.
+- **Merge pitfalls:** Keep the upstream match without a catch-all warning or
+  fallback; do not remove the `Funbox6` case.
 
 ### 7. Rate-limit topology builds when there are no repeaters
 
@@ -285,7 +280,7 @@ explicitly rather than inferred.
 6. Check the safeguard symbols and test names after the rebase. For example:
 
    ```bash
-   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_migrate_wan_access_unique_ids|_async_turn_on_guest_wifi_fibre|_async_turn_off_guest_wifi_fibre|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Unknown Livebox ProductClass|Funbox6|normalize_display_devices|normalize_options' custom_components/livebox
+   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_migrate_wan_access_unique_ids|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Funbox6|normalize_display_devices|normalize_options' custom_components/livebox
    ```
 
    Also confirm the protecting test names listed above still exist and update

@@ -134,6 +134,8 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 - Call-log calendar realigned with upstream (30-day pruning removed)
 - Rolling 32-bit counters realigned with upstream (per-entity state removed)
 - Session credentials are written to storage only when they change, not on every poll
+- Fibre guest Wi-Fi controls realigned with upstream; pinned aiosysbus handles timer calls
+- Unknown ProductClass warning removed to match upstream
 
 ### 2.6.0.2
 
@@ -197,3 +199,8 @@ in 2.6.0.3 to avoid diverging from upstream; do not re-add it.
 Rolling counter state is shared across config entries, so totals can be wrong
 when two or more Liveboxes are configured in the same Home Assistant. The owner
 has one Livebox, so this is accepted to avoid diverging from upstream.
+
+### Unknown Livebox ProductClass
+
+An unrecognized `ProductClass` leaves `model` unset without a warning. This is
+accepted to stay aligned with upstream.

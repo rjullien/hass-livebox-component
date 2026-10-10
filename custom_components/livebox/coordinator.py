@@ -162,9 +162,6 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                     self.model = 7.2
                 case "Funbox6":
                     self.model = 6.1  # SagemcomFast5670_OPL
-                case _:
-                    _LOGGER.warning("Unknown Livebox ProductClass: %s", product_class)
-                    self.model = None
             # Optionals
             wifi_tracking = self.config_entry.options.get(
                 CONF_WIFI_TRACKING, DEFAULT_WIFI_TRACKING
