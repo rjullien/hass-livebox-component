@@ -112,3 +112,10 @@ When a test needs the mock active but never reads it, use
 
 Shared non-fixture code goes in `tests/helpers.py` and is imported with
 `from .helpers import ...`. Never import from `conftest.py`.
+
+## Fork sync (rjullien) — keep upstream ancestry
+
+The owner's HA (`ForkUpstreamMonitor`) uses GitHub compare `upstream-tag...master`, which counts commits by **ancestry, not content**.
+
+- Sync = rebase the fork commits onto `upstream/master` (upstream tag), bump `manifest.json` to `X.Y.Z.1`, tag `vX.Y.Z.1`, force-push `master` (old state kept by the previous tag). Never squash upstream commits; if you port upstream changes by hand instead, finish with `git merge -s ours <upstream-tag>`.
+- Done only when `git fetch upstream --tags && git rev-list --left-right --count <upstream-tag>...origin/master` prints `0 <ahead>`.
