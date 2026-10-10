@@ -189,6 +189,20 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
   - Guest WiFi turn_off fix for Livebox Fibre
   - Reconfigure flow, device sensors, eth interfaces (from upstream)
 
+## Upstream contributions
+
+Fork fixes proposed to cyr-ius/hass-livebox-component, one problem per PR, at most one new PR per week and only after earlier ones got an answer. Each branch is based on `upstream/master`; the PR text to paste is in `upstream-prs/`. The Devin token cannot open PRs upstream: the owner opens them from the compare link. The weekly Devin check updates the Status column.
+
+| PR                                                 | Branch                                                                                                                                                                 | Text                                                | Status                                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| Session logout (`X-Sah-Logout` + `releaseContext`) | [upstream/fix-session-logout](https://github.com/cyr-ius/hass-livebox-component/compare/master...rjullien:hass-livebox-component:upstream/fix-session-logout?expand=1) | [session-logout.md](upstream-prs/session-logout.md) | Ready — validated on cam 2026-10-10 (2.6.0.4); upstream PR not opened yet |
+| Uptime icon `mdi:` prefix                          | [upstream/fix-uptime-icon](https://github.com/cyr-ius/hass-livebox-component/compare/master...rjullien:hass-livebox-component:upstream/fix-uptime-icon?expand=1)       | [uptime-icon.md](upstream-prs/uptime-icon.md)       | Ready — in service on cam since 2026-10-10; upstream PR not opened yet    |
+| Topology scan every 24 h when no repeater          | —                                                                                                                                                                      | —                                                   | Planned                                                                   |
+| Repeater device created before re-linking clients  | —                                                                                                                                                                      | —                                                   | Planned (refusal by HA not reproduced yet)                                |
+| "Active only" option value migrated to "Active"    | —                                                                                                                                                                      | —                                                   | Planned                                                                   |
+
+Already merged upstream: #298, #299, #300 (2.6.0).
+
 ## Known issues (accepted)
 
 ### Call-log calendar cache
