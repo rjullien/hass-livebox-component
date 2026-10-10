@@ -128,6 +128,11 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ## Changelog (fork)
 
+### 2.6.0.2
+
+- Replace the deprecated device-registry lookup for repeater parents while retaining compatibility with HA 2025.5
+- Restore fork safeguard coverage using upstream-style AIOSysbus integration setup tests
+
 ### 2.6.0.1
 
 - Rebase fork history onto upstream **v2.6.0** (`30c75a0`) so GitHub Compare / ForkUpstreamMonitor report `behind_by=0`
