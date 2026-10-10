@@ -192,22 +192,20 @@ explicitly rather than inferred.
   migrate persisted options on setup; changing only the UI leaves older
   entries with an invalid stored value.
 
-### 9. Bound the call-log calendar cache
+### 9. Keep the call-log calendar aligned with upstream
 
-- **What:** Prune cached calls older than 30 days in
-  `LiveboxCallLogCalendar.async_get_events`, handle naive and timezone-aware
-  call timestamps, and return a materialized list of events.
-- **Why:** Commit `32b3d54` documents that the cache previously grew
-  indefinitely until a Livebox reboot.
-- **Where:** `calendar.py::LiveboxCallLogCalendar.async_get_events`.
-- **Protecting tests:** `tests/test_calendar.py::test_async_get_events_returns_list`
-  and `tests/test_calendar.py::test_async_get_events_filters_by_range`.
-  Neither test directly asserts the 30-day pruning behavior.
-- **Merge pitfalls:** Preserve the rolling retention bound, aware/naive
-  datetime comparison, and list return type. The current calendar tests use
-  `object.__new__` and a fake coordinator, unlike the current `AGENTS.md`
-  testing rules; do not copy that setup for new safeguard tests, and convert
-  these tests to the AIOSysbus integration style if rewriting this file.
+- **Status:** The fork's 30-day pruning was removed in 2.6.0.3. Do not
+  re-introduce it.
+- **Why:** The cache growth is accepted: it is cleared when the Livebox reboots,
+  uses only a few hundred bytes per call, and the owner's line receives
+  practically no calls. See README's "Known issues (accepted)" section.
+- **Where:** `calendar.py::LiveboxCallLogCalendar._calls` follows upstream and
+  remains unbounded until a Livebox reboot.
+- **Protecting tests:** None; the fork-only calendar tests were removed with
+  the pruning behavior.
+- **Merge pitfalls:** Keep `calendar.py` identical to upstream unless a
+  behavior change is explicitly approved; do not restore the removed pruning
+  to avoid unnecessary divergence.
 
 ### 10. Preserve the legacy `unique_id` guard and uptime icon
 
@@ -288,7 +286,7 @@ explicitly rather than inferred.
 6. Check the safeguard symbols and test names after the rebase. For example:
 
    ```bash
-   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_compute_rolling_32_bit|_migrate_wan_access_unique_ids|_async_turn_on_guest_wifi_fibre|_async_turn_off_guest_wifi_fibre|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Unknown Livebox ProductClass|Funbox6|normalize_display_devices|normalize_options|30 days' custom_components/livebox
+   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_compute_rolling_32_bit|_migrate_wan_access_unique_ids|_async_turn_on_guest_wifi_fibre|_async_turn_off_guest_wifi_fibre|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Unknown Livebox ProductClass|Funbox6|normalize_display_devices|normalize_options' custom_components/livebox
    ```
 
    Also confirm the protecting test names listed above still exist and update

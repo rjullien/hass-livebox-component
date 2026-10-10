@@ -130,7 +130,8 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ### 2.6.0.3
 
-- Realign cosmetic hunks with upstream, no behaviour change
+- Realign cosmetic hunks with upstream
+- Call-log calendar realigned with upstream (30-day pruning removed)
 
 ### 2.6.0.2
 
@@ -179,3 +180,12 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
   - WAN access unique_id migration (#287)
   - Guest WiFi turn_off fix for Livebox Fibre
   - Reconfigure flow, device sensors, eth interfaces (from upstream)
+
+## Known issues (accepted)
+
+### Call-log calendar cache
+
+`LiveboxCallLogCalendar._calls` grows until the Livebox reboots. The impact is
+negligible (a few hundred bytes per call), the cache is cleared on reboot, and
+the owner's line receives practically no calls. The 30-day pruning was removed
+in 2.6.0.3 to avoid diverging from upstream; do not re-add it.
