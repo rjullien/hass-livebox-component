@@ -121,5 +121,5 @@ Shared non-fixture code goes in `tests/helpers.py` and is imported with
 
 The owner's HA (`ForkUpstreamMonitor`) uses GitHub compare `upstream-tag...master`, which counts commits by **ancestry, not content**.
 
-- Sync = rebase the fork commits onto `upstream/master` (upstream tag), bump `manifest.json` to `X.Y.Z.1`, tag `vX.Y.Z.1`, force-push `master` (old state kept by the previous tag). Never squash upstream commits; if you port upstream changes by hand instead, finish with `git merge -s ours <upstream-tag>`.
-- Done only when `git fetch upstream --tags && git rev-list --left-right --count <upstream-tag>...origin/master` prints `0 <ahead>`.
+- Sync = merge the upstream tag into a dedicated fork branch with `git merge --no-ff <upstream-tag>`, then bump `manifest.json` to `X.Y.Z.1`. If upstream changes were ported manually, record ancestry afterward with `git merge -s ours <upstream-tag>`. Never squash, rebase, or force-push.
+- Done only when `git rev-list --left-right --count <upstream-tag>...origin/master` prints `0 <ahead>` after the ancestry-preserving sync reaches `origin/master`.

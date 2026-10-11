@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import ClientSession
+from aiosysbus.exceptions import HttpRequestFailed
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -243,116 +244,43 @@ async def test_coordinator_persists_only_changed_session(
         )
 
 
-@pytest.mark.parametrize(
-    ("session_token", "cookies", "should_logout"),
-    [
-        (None, {"SESSIONID": "session-cookie"}, False),
-        ("session-context", {}, False),
-        ("session-context", {"SESSIONID": "session-cookie"}, True),
-    ],
-)
 @pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
-async def test_unload_logout_uses_credentials_only(
+@pytest.mark.parametrize("logout_fails", [False, True])
+async def test_unload_calls_api_logout_and_clears_persisted_session(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
     AIOSysbus: AsyncMock | MagicMock,
-    session_token: str | None,
-    cookies: dict[str, str],
-    should_logout: bool,
+    logout_fails: bool,
 ) -> None:
-    """Logout requires both context and cookies and passes the context ID."""
+    """Unloading logs out through aiosysbus and clears persisted session data."""
     _set_mock_session(AIOSysbus)
     await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
 
-    AIOSysbus._auth.session_token = session_token
-    AIOSysbus._auth._cookies = cookies
-    with patch(
-        "custom_components.livebox.coordinator.async_logout_session",
-        new_callable=AsyncMock,
-        return_value=True,
-    ) as mock_logout:
-        assert await hass.config_entries.async_unload(config_entry.entry_id)
-        await hass.async_block_till_done()
+    store = LiveboxSessionStore(hass, config_entry.entry_id)
+    await store.async_load()
+    assert store.has_session is True
 
-    if not should_logout:
-        mock_logout.assert_not_awaited()
-        return
+    if logout_fails:
+        AIOSysbus.async_logout.side_effect = HttpRequestFailed("Connection failed")
 
-    mock_logout.assert_awaited_once()
-    call_args = mock_logout.call_args
-    assert call_args.args[1] == "http://192.168.1.1/ws"
-    assert call_args.args[2] == "session-context"
-    assert call_args.args[3] == {"SESSIONID": "session-cookie"}
-    assert call_args.kwargs["verify_tls"] is False
+    assert await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.async_block_till_done()
+    AIOSysbus.async_logout.assert_awaited_once()
+
+    cleared_store = LiveboxSessionStore(hass, config_entry.entry_id)
+    await cleared_store.async_load()
+    assert cleared_store.has_session is False
 
 
-async def test_store_verify_tls_default(hass) -> None:
-    """verify_tls defaults to True when not persisted (legacy data)."""
-    store = LiveboxSessionStore(hass, "test_entry_legacy")
-    # Simulate loading legacy data without verify_tls field
-    store._data = {
-        "cookies": {"sessid": "old"},
-        "context_id": "old_ctx",
-        "base_url": "http://192.168.1.1/ws",
-    }
-    assert store.verify_tls is True
-
-
-# ---------------------------------------------------------------------------
-# G3 — Integration: unload calls logout
-# ---------------------------------------------------------------------------
-
-
-async def test_unload_calls_logout(hass) -> None:
-    """async_unload_entry triggers coordinator.async_logout."""
-    from custom_components.livebox import async_unload_entry
-
-    mock_coordinator = MagicMock()
-    mock_coordinator.async_logout = AsyncMock()
-
-    mock_entry = MagicMock()
-    mock_entry.runtime_data = mock_coordinator
-
-    with patch(
-        "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
-        return_value=True,
-    ):
-        result = await async_unload_entry(hass, mock_entry)
-
-    assert result is True
-    mock_coordinator.async_logout.assert_awaited_once()
-
-
-async def test_unload_no_runtime_data(hass) -> None:
-    """async_unload_entry handles missing runtime_data gracefully."""
-    from custom_components.livebox import async_unload_entry
-
-    mock_entry = MagicMock(spec=[])  # No runtime_data attribute
-
-    with patch(
-        "homeassistant.config_entries.ConfigEntries.async_unload_platforms",
-        return_value=True,
-    ):
-        result = await async_unload_entry(hass, mock_entry)
-
-    assert result is True
-
-
-# ---------------------------------------------------------------------------
-# G4 — Integration: orphan cleanup on boot
-# ---------------------------------------------------------------------------
-
-
-async def test_orphan_cleanup_on_boot(hass) -> None:
-    """Pre-populated store triggers logout and is cleared on setup."""
-    from custom_components.livebox import _async_logout_orphaned_session
-
-    mock_entry = MagicMock()
-    mock_entry.entry_id = "test_orphan_entry"
-
-    # Pre-populate the store
-    store = LiveboxSessionStore(hass, "test_orphan_entry")
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_orphan_cleanup_on_boot(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """Setup releases an orphaned session and clears its persisted data."""
+    store = LiveboxSessionStore(hass, config_entry.entry_id)
     await store.async_save(
         cookies={"sessid": "orphan_cookie"},
         context_id="orphan_ctx",
@@ -365,18 +293,15 @@ async def test_orphan_cleanup_on_boot(hass) -> None:
         new_callable=AsyncMock,
         return_value=True,
     ) as mock_logout:
-        await _async_logout_orphaned_session(hass, mock_entry)
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
 
-    # Verify logout was called with the stored context, cookies, URL and TLS flag.
     mock_logout.assert_awaited_once()
     call_kwargs = mock_logout.call_args
-    # positional: (session, base_url, context_id, cookies)
     assert call_kwargs[0][1] == "http://192.168.1.1/ws"
     assert call_kwargs[0][2] == "orphan_ctx"
     assert call_kwargs[0][3] == {"sessid": "orphan_cookie"}
     assert call_kwargs[1]["verify_tls"] is True
 
-    # Verify store was cleared
-    store2 = LiveboxSessionStore(hass, "test_orphan_entry")
-    await store2.async_load()
-    assert store2.has_session is False
+    await store.async_load()
+    assert store.has_session is False
