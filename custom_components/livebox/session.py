@@ -5,8 +5,6 @@ orphaned contexts can be released before creating new sessions. This prevents
 session exhaustion on the Livebox.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 
