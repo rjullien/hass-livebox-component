@@ -24,6 +24,7 @@ from .const import (
     CONF_USE_TLS,
     CONF_VERIFY_TLS,
     CONF_WIFI_TRACKING,
+    DEFAULT_DISPLAY_DEVICES,
     DEFAULT_LAN_TRACKING,
     DEFAULT_WIFI_TRACKING,
     DOMAIN,
@@ -217,7 +218,10 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         """Get all devices."""
         devices_tracker = {}
         device_counters = {"wireless": 0, "wired": 0}
-        if self.config_entry.options.get(CONF_DISPLAY_DEVICES) == "All":
+        mode = self.config_entry.options.get(
+            CONF_DISPLAY_DEVICES, DEFAULT_DISPLAY_DEVICES
+        )
+        if mode == "All":
             parameters = {
                 "expression": {
                     "wifi": (
