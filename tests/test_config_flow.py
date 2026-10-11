@@ -13,7 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.livebox.const import DOMAIN
+from custom_components.livebox.const import (
+    CONF_DISPLAY_DEVICES,
+    DEFAULT_DISPLAY_DEVICES,
+    DOMAIN,
+)
 
 from .const import MOCK_USER_INPUT
 
@@ -54,9 +58,15 @@ async def test_form_success(
 
         # Assert the flow finished and created an entry
         assert result2["type"] == FlowResultType.CREATE_ENTRY
-        assert result2["title"] == "Livebox (012345678901234)"  # From INFO fixture
+        product_class = AIOSysbus.api_raw["DeviceInfo.async_get_deviceinfo"]["status"][
+            "ProductClass"
+        ]
+        assert result2["title"] == f"{product_class} (012345678901234)"
         assert result2["data"] == MOCK_USER_INPUT
         assert result2["result"].unique_id == "012345678901234"  # From INFO fixture
+
+    # The validation session is released, the integration opens its own one.
+    AIOSysbus.async_logout.assert_awaited_once()
 
 
 @pytest.mark.parametrize("AIOSysbus", ["3", "5", "7", "7.1", "7.2"], indirect=True)
@@ -133,7 +143,7 @@ async def test_form_unknown(hass: HomeAssistant, AIOSysbus: AsyncMock) -> None:
 
 @pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
 async def test_options_flow_active(hass: HomeAssistant, AIOSysbus: AsyncMock) -> None:
-    """Test options flow accepts 'Active' as display_devices value."""
+    """Test options flow accepts 'Active only' as display_devices value."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
     from custom_components.livebox.const import (
@@ -150,7 +160,7 @@ async def test_options_flow_active(hass: HomeAssistant, AIOSysbus: AsyncMock) ->
             CONF_WIFI_TRACKING: True,
             CONF_LAN_TRACKING: False,
             CONF_TRACKING_TIMEOUT: 300,
-            CONF_DISPLAY_DEVICES: "Active",
+            CONF_DISPLAY_DEVICES: "Active only",
         },
         unique_id="options-test-1234",
     )
@@ -166,54 +176,11 @@ async def test_options_flow_active(hass: HomeAssistant, AIOSysbus: AsyncMock) ->
             CONF_WIFI_TRACKING: True,
             CONF_LAN_TRACKING: False,
             CONF_TRACKING_TIMEOUT: 300,
-            CONF_DISPLAY_DEVICES: "Active",
-        },
-    )
-    assert result2["type"] == FlowResultType.CREATE_ENTRY
-    assert result2["data"][CONF_DISPLAY_DEVICES] == "Active"
-
-
-@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
-async def test_options_flow_migrates_legacy_active_only(
-    hass: HomeAssistant, AIOSysbus: AsyncMock
-) -> None:
-    """Legacy stored 'Active only' must open and save without validation errors."""
-    from custom_components.livebox.const import (
-        CONF_DISPLAY_DEVICES,
-        CONF_LAN_TRACKING,
-        CONF_TRACKING_TIMEOUT,
-        CONF_WIFI_TRACKING,
-    )
-
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        data=MOCK_USER_INPUT,
-        options={
-            CONF_WIFI_TRACKING: True,
-            CONF_LAN_TRACKING: False,
-            CONF_TRACKING_TIMEOUT: 300,
-            CONF_DISPLAY_DEVICES: "Active only",
-        },
-        unique_id="options-legacy-active-only",
-    )
-    entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] == FlowResultType.FORM
-    assert result["step_id"] == "init"
-
-    # Saving the legacy value itself must coerce to the current selector value.
-    result2 = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        user_input={
-            CONF_WIFI_TRACKING: True,
-            CONF_LAN_TRACKING: False,
-            CONF_TRACKING_TIMEOUT: 300,
             CONF_DISPLAY_DEVICES: "Active only",
         },
     )
     assert result2["type"] == FlowResultType.CREATE_ENTRY
-    assert result2["data"][CONF_DISPLAY_DEVICES] == "Active"
+    assert result2["data"][CONF_DISPLAY_DEVICES] == "Active only"
 
 
 @pytest.mark.parametrize("AIOSysbus", ["3", "5", "7", "7.1", "7.2"], indirect=True)
@@ -294,3 +261,36 @@ async def test_reconfigure_updates_entry(
         assert result2["reason"] == "reconfigure_successful"
         assert entry.data == new_input
         mock_reload.assert_called_once_with(entry.entry_id)
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_form_logout_error(hass: HomeAssistant, AIOSysbus: AsyncMock) -> None:
+    """A failed release of the validation session does not fail the flow."""
+    AIOSysbus.async_logout.side_effect = HttpRequestFailed("Connection failed")
+
+    with patch("custom_components.livebox.config_flow.AIOSysbus") as mock_livebox:
+        mock_livebox.return_value = AIOSysbus
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_USER},
+            data=MOCK_USER_INPUT,
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.parametrize("stored", [None, "Active"])
+async def test_options_flow_defaults_are_valid(
+    hass: HomeAssistant, stored: str | None
+) -> None:
+    """The options form accepts its defaults, including the legacy value."""
+    options = {} if stored is None else {CONF_DISPLAY_DEVICES: stored}
+    entry = MockConfigEntry(domain=DOMAIN, data=MOCK_USER_INPUT, options=options)
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] == FlowResultType.FORM
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_DISPLAY_DEVICES] == DEFAULT_DISPLAY_DEVICES

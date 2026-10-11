@@ -1,11 +1,11 @@
 # Fork safeguards for upstream syncs
 
-This inventory was checked against `git diff 30c75a0..origin/master`, where
-`30c75a0` is upstream v2.6.0 and `origin/master` is fork v2.6.0.2. The entries
-below account for the fork's code, test, workflow, and tooling changes in that
-comparison. Reasons are grounded in the fork changelog, commit history, linked
-issues, or owner-provided operating context; anything not documented is marked
-explicitly rather than inferred.
+This inventory was checked against `git diff 2.6.1-beta4...HEAD`, where
+`2.6.1-beta4` (`0e7fb0a`) is the upstream base and `HEAD` is fork release
+`2.6.1.1`. The entries below account for the fork's remaining code, test,
+workflow, and tooling differences. Reasons are grounded in the fork changelog,
+linked issues, or owner-provided operating context; anything not documented is
+marked explicitly rather than inferred.
 
 See the README's [Upstream contributions](README.md#upstream-contributions) section for current proposals and status.
 
@@ -15,11 +15,13 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
 - **What:** Persist each entry's session cookies, context ID, base URL, and TLS
   verification setting after successful polling, but write only when that
-  tuple changes. Log out when an entry unloads, and attempt to release a
-  persisted orphan before setting up a new session.
-  On a top-level `HttpRequestFailed`, clear the in-memory session token so the
-  next polling cycle can authenticate again.
-- **Logout mechanism:** POST to the stored `/ws` URL with the session cookies,
+  tuple changes. Use upstream `aiosysbus 1.2.6` logout on unload, HA stop,
+  failed first refresh, and config flow. Before setup, attempt to release a
+  persisted orphan left by a crash or power loss. On a top-level
+  `HttpRequestFailed`, clear the in-memory session token so the next polling
+  cycle can authenticate again.
+- **Logout mechanism:** Upstream `self.api.async_logout()` handles normal
+  logout. Orphan cleanup posts to the stored `/ws` URL with session cookies,
   `Authorization: X-Sah-Logout <context_id>`, content type
   `application/x-sah-ws-1-call+json`, and a `releaseContext` request for
   `sah.Device.Information` with application name `so_sdkut`. Success requires
@@ -37,17 +39,15 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   `session.py::async_logout_session`; `coordinator.py::async_persist_session`,
   `coordinator.py::async_logout`, and
   `LiveboxDataUpdateCoordinator._async_update_data`;
-  `__init__.py::_async_logout_orphaned_session`,
-  `async_setup_entry`, and `async_unload_entry`.
+  `__init__.py::_async_logout_orphaned_session` and `async_setup_entry`.
 - **Protecting tests:** `tests/test_session.py::test_logout_session_success`,
   `test_logout_session_failure_payload`, `test_logout_session_failure_status`,
   `test_logout_session_exception`, `test_logout_session_non_json`,
   `test_logout_session_missing_context_id`,
   `test_store_save_load_roundtrip`, `test_store_clear`,
   `test_coordinator_persists_only_changed_session`,
-  `test_unload_logout_uses_credentials_only`,
-  `test_store_verify_tls_default`, `test_unload_calls_logout`,
-  `test_unload_no_runtime_data`, and `test_orphan_cleanup_on_boot`.
+  `test_unload_calls_api_logout_and_clears_persisted_session`, and
+  `test_orphan_cleanup_on_boot`.
 - **Merge pitfalls:** Do not revert to `/logout.cmd`; it returned HTTP 404 on
   Livebox Fibre. Preserve the `X-Sah-Logout` header and `releaseContext` body,
   and pass the stored context ID with the cookies and TLS setting for orphan
@@ -65,21 +65,15 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   best-effort logout warning is harmless when data starts flowing immediately
   afterward; do not mistake the warning alone for a failed integration setup.
 
-### 2. Rolling 32-bit counter isolation (removed in 2.6.0.3)
+### 2. Rolling 32-bit counters (aligned with upstream in 2.6.1.1)
 
-- **Status:** The per-entity state safeguard was removed in 2.6.0.3.
-  Upstream's module-level closures are accepted; do not re-add per-entity
-  state or the fork-only multi-box tests.
-- **Known issue:** The closures in `SENSOR_TYPES` share rolling state across
-  config entries, so totals can be wrong with two or more Liveboxes in one
-  Home Assistant. René has one Livebox and accepts this to avoid divergence;
-  see README's "Known issues (accepted)" section.
-- **Where:** `sensor.py::get_rolling_32_bit_value_fn` and `SENSOR_TYPES` retain
+- **Status:** Upstream now keeps rollover state per entity. The fork-specific
+  implementation and multi-box regression test were removed.
+- **Where:** `sensor.py::get_rolling_32_bit_value_fn` and `SENSOR_TYPES` use
   upstream behavior.
-- **Protecting tests:** None; the fork-only rolling-counter tests were removed
-  in 2.6.0.3.
-- **Merge pitfalls:** Leave upstream's module-level closures unchanged. Do not
-  restore per-entity state or tests when syncing upstream.
+- **Protecting tests:** No fork-only counter tests remain.
+- **Merge pitfalls:** Keep the upstream per-entity rollover handling; do not
+  restore older module-level shared state.
 
 ### 3. Preserve WAN access switch identity and manual override semantics
 
@@ -105,7 +99,7 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
 - **Status:** The fork-only helpers were removed in 2.6.0.3; keep upstream's
   `async_guest_wifi` callbacks in `SWITCH_TYPES_5`.
-- **Why:** With pinned aiosysbus 1.2.5, `NMC.async_guest_wifi` makes the same
+- **Why:** With pinned aiosysbus 1.2.6, `NMC.async_guest_wifi` makes the same
   calls: `set_guest_wifi` plus `set_wlan_timer(0, "guest")` on enable, and
   `disable_wlan_timer("guest")` on disable. The helpers only worked around an
   older aiosysbus and are no longer needed.
@@ -115,31 +109,23 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Merge pitfalls:** Do not re-add the Fibre helpers; retain the upstream
   callbacks, which include the timer operations in the pinned aiosysbus.
 
-### 5. Keep repeater parent links valid and compatible with HA 2025.5
+### 5. Repeater parent links (aligned with upstream in 2.6.1.1)
 
-- **What:** When topology assigns a client to a newly discovered repeater,
-  create the repeater registry device before updating the client's
-  `via_device`. If topology names a parent that is not a known repeater, keep
-  the existing parent so a later refresh can retry. Look up parents with
-  `async_get_device_by_identifier` when available, falling back to
-  `async_get_device(identifiers=...)` for the declared minimum HA 2025.5.
-- **Why:** Commit `2dce189` identifies the repeater-link behavior as fixing
-  issue #191; `a0167c2` explains that HA rejects a `via_device` whose repeater
-  registry entry does not yet exist. The compatibility fallback is documented
-  in the 2.6.0.2 changelog and is required by the fork's HA minimum.
-- **Where:** `device_tracker.py::LiveboxDeviceScannerEntity._handle_coordinator_update`
-  and `LiveboxDataUpdateCoordinator.get_parent_device_identifier`.
-- **Protecting tests:** `tests/test_device_tracker.py::test_device_tracker_links_clients_to_repeaters`,
-  `test_device_tracker_updates_via_device_on_coordinator_refresh`,
-  `test_device_tracker_creates_missing_repeater_before_via_update`,
-  and `test_device_tracker_keeps_parent_when_topology_parent_is_unknown`.
-- **Merge pitfalls:** Keep the missing-parent creation before the client
-  registry update, and retain the legacy lookup fallback until the minimum HA
-  version is raised. The tests run on the installed HA registry API; they do
-  not directly exercise the fallback branch. The unknown-parent test supplies
-  that condition by patching `get_parent_device_identifier`. The nearby TODO
-  about removing vanished devices is deferred work, not a reason to discard
-  the current parent-link behavior.
+- **Status:** Upstream now provides `via_device_id`, resolves parent registry
+  entries with `async_get_device_by_identifier`, and updates existing links
+  through `entity._async_update_via_device`. The legacy lookup fallback and
+  fork-only unknown-parent behavior were removed.
+- **Why:** The upstream implementation uses current Home Assistant registry
+  APIs; the fork minimum is now HA 2026.8.0.
+- **Where:** `entity.py`, `device_tracker.py`, `switch.py`, and
+  `LiveboxDataUpdateCoordinator.get_parent_device_id`.
+- **Protecting tests:** Upstream registry tests including
+  `tests/test_device_tracker.py::test_device_tracker_links_clients_to_repeaters`
+  and the compatible fork test
+  `test_device_tracker_updates_via_device_on_coordinator_refresh`.
+- **Merge pitfalls:** Keep upstream `via_device_id` and
+  `_async_update_via_device`; do not restore the
+  `async_get_device(identifiers=...)` compatibility fallback.
 
 ### 6. Unknown ProductClass fallback (removed in 2.6.0.3)
 
@@ -183,74 +169,58 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   topology API request. Moving the timestamp to the success path reintroduces
   one-minute retries after failures.
 
-### 8. Migrate the legacy “Active only” option
+### 8. Display-device option (aligned with upstream in 2.6.1.1)
 
-- **What:** Normalize the stored selector value `Active only` to `Active` on
-  setup and in the options flow; expose only `All` and `Active` as current
-  values.
-- **Why:** The README 2.5.4.3 changelog records this migration, and commits
-  `8e08a3f` and `436412d` describe the option mismatch and validation failure
-  for older entries.
-- **Where:** `const.py::DISPLAY_DEVICES_OPTIONS`;
-  `helpers.py::normalize_display_devices` and `normalize_options`;
-  `config_flow.py::LiveboxOptionsFlowHandler`; `coordinator.py` device filtering;
-  `__init__.py::async_setup_entry`.
-- **Protecting tests:** `tests/test_config_flow.py::test_options_flow_active`,
-  `tests/test_config_flow.py::test_options_flow_migrates_legacy_active_only`,
-  and `tests/test_setup.py::test_setup_migrates_legacy_active_only`.
-- **Merge pitfalls:** Normalize before validating the options selector and
-  migrate persisted options on setup; changing only the UI leaves older
-  entries with an invalid stored value.
+- **Status:** Upstream uses `DEFAULT_DISPLAY_DEVICES = "Active only"` and maps
+  stored values in the options form. Any value other than `"All"` is treated
+  as active, so existing `"Active"` settings remain valid without migration.
+- **Where:** `const.py`, `config_flow.py`, and coordinator device filtering.
+- **Protecting tests:** `tests/test_config_flow.py::test_options_flow_active`
+  and `test_options_flow_defaults_are_valid`.
+- **Merge pitfalls:** Keep the upstream options mapping and do not restore
+  `DISPLAY_DEVICES_OPTIONS`, normalization helpers, or setup-time migration.
 
-### 9. Keep the call-log calendar aligned with upstream
+### 9. Call-log calendar
 
-- **Status:** The fork's 30-day pruning was removed in 2.6.0.3. Do not
-  re-introduce it.
-- **Why:** The cache growth is accepted: it is cleared when the Livebox reboots,
+- **Status:** Upstream now fixes overlapping call windows. The fork's 30-day
+  pruning remains removed; upstream still does not prune the cache.
+- **Why:** Cache growth is accepted: it is cleared when the Livebox reboots,
   uses only a few hundred bytes per call, and the owner's line receives
-  practically no calls. See README's "Known issues (accepted)" section.
-- **Where:** `calendar.py::LiveboxCallLogCalendar._calls` follows upstream and
-  remains unbounded until a Livebox reboot.
-- **Protecting tests:** None; the fork-only calendar tests were removed with
-  the pruning behavior.
-- **Merge pitfalls:** Keep `calendar.py` identical to upstream unless a
-  behavior change is explicitly approved; do not restore the removed pruning
-  to avoid unnecessary divergence.
+  practically no calls.
+- **Where:** `calendar.py::LiveboxCallLogCalendar`.
+- **Protecting tests:** `tests/test_calendar.py::test_calendar_returns_overlapping_calls`.
+- **Merge pitfalls:** Keep the upstream overlapping-window fix and do not
+  re-introduce pruning.
 
-### 10. Preserve the legacy `unique_id` guard and uptime icon
+### 10. Preserve the legacy `unique_id` guard
 
 - **What:** `async_setup_entry` resets a legacy non-string config-entry
   `unique_id` so setup can repopulate it from the router serial; the reset is a
-  no-op when `unique_id` is already a string. The uptime sensor uses the icon
-  `mdi:progress-clock`.
+  no-op when `unique_id` is already a string. The uptime icon is now aligned
+  with upstream as `mdi:progress-clock`.
 - **Why:** The origin of the legacy non-string `unique_id` reset is
-  undocumented; it is a no-op when `unique_id` is already a string. Preserve
-  the icon's `mdi:` prefix because upstream's `progress-clock` lacks that
-  prefix, so Home Assistant shows no icon.
-- **Where:** `__init__.py::async_setup_entry` and the uptime entity description
-  in `sensor.py`.
+  undocumented; it is a no-op when `unique_id` is already a string. The
+  upstream uptime icon fix was merged as cyr-ius#353.
+- **Where:** `__init__.py::async_setup_entry` and `sensor.py`.
 - **Protecting tests:** `tests/test_setup.py::test_setup_entry` and
-  `tests/test_setup.py::test_coordinator_refresh` provide general setup/refresh
-  coverage, but no targeted test was found for these individual hunks.
-- **Merge pitfalls:** Keep the legacy reset guarded so already-string IDs are
-  unaffected, and retain the `mdi:` icon prefix. Keep coordinator method
-  spelling, signatures, and expressions aligned with upstream unless a
-  behavior or compatibility fix requires a documented fork difference.
+  `tests/test_setup.py::test_coordinator_refresh` provide general
+  setup/refresh coverage.
+- **Merge pitfalls:** Keep the non-string guard and leave the uptime icon
+  aligned with upstream.
 
 ### 11. Fork metadata and tooling / CI
 
 - **What:** GitHub Actions workflows run HACS and stale handling for owner
   `rjullien`; release tags accept both `X.Y.Z` and fork `X.Y.Z.N`. Dependabot
   checks GitHub Actions and `uv` weekly. `pyproject.toml` pins development
-  `aiosysbus==1.2.5`, requires `pytest-homeassistant-custom-component>=0.13.346`,
-  and targets Ruff at Python 3.13; `uv.lock` records those dependency and lock
+  `aiosysbus==1.2.6`, requires `pytest-homeassistant-custom-component>=0.13.346`,
+  and targets Ruff at Python 3.14; `uv.lock` records those dependency and lock
   format updates. The manifest points code ownership, documentation, and issue
-  tracking at the fork and carries version `2.6.0.3`. README records fork
-  status, versioning, and changelog.
-- **Why:** The README 2.5.4.2 changelog documents the modern development stack,
-  lockfile compatibility, and four-part versioning. README 2.5.6.1 explains
-  why Ruff must remain at `py313`: HA's 2025.5 runtime minimum uses Python 3.13,
-  even though development/CI uses Python 3.14.
+  tracking at the fork and carries version `2.6.1.1`. HACS declares minimum HA
+  2026.8.0; README records fork status, versioning, and changelog.
+- **Why:** The README changelog documents the modern development stack,
+  lockfile compatibility, and four-part versioning. Upstream now requires HA
+  2026.8.0 and uses Python 3.14 syntax.
 - **Where:** `.github/dependabot.yml`;
   `.github/workflows/hacs.yml`, `release.yml`, and `stale.yaml`;
   `pyproject.toml`, `uv.lock`, `custom_components/livebox/manifest.json`, and
@@ -258,9 +228,8 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Protecting tests:** No unit test covers workflow or repository metadata.
   Validate these through `uv run prek run --all-files` and the repository's
   HACS/manifest CI checks.
-- **Merge pitfalls:** Do not change the fork owner back to `cyr-ius`, drop the
-  four-part release glob, or raise Ruff's target to Python 3.14 while HA
-  2025.5 remains supported. Regenerate `uv.lock` through `uv`, not by editing
+- **Merge pitfalls:** Do not change the fork owner back to `cyr-ius` or drop
+  the four-part release glob. Regenerate `uv.lock` through `uv`, not by editing
   it manually, and keep the manifest's integration version synchronized with
   the README fork changelog.
 
@@ -268,20 +237,20 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
 1. Keep the previous released fork state under its existing `vX.Y.Z.N` tag;
    that tag is the pre-sync checkpoint and must not be moved.
-2. Rebase the fork commits onto the new upstream release tag, rather than
-   merging upstream. This keeps GitHub Compare and ForkUpstreamMonitor at
-   `behind_by=0`. Re-apply any safeguard that upstream did not take, resolving
-   conflicts against the inventory above. Avoid cosmetic-only divergence:
-   preserve upstream expressions, method names, and signatures unless a
-   behavior or compatibility fix justifies a fork-specific difference.
+2. Merge the upstream release tag into a fork sync branch with
+   `git merge --no-ff <tag>`. If upstream changes were ported manually, record
+   ancestry afterward with `git merge -s ours <tag>`. Never squash, rebase,
+   or force-push. Re-apply only safeguards that upstream did not take,
+   resolving conflicts against the inventory above and avoiding cosmetic-only
+   divergence.
 3. Set the integration version to `X.Y.Z.N`: use the new upstream
    `X.Y.Z` base and reset fork revision `N` to `.1`. Update the README **Fork
    status** and add the fork changelog entry.
-4. If upstream rewrote a test file, restore the safeguard regression tests in
-   the current upstream test style: drive setup through the `AIOSysbus` mock
-   and real config-entry/platform setup. Do not use `object.__new__`, fake
-   coordinators, or direct coordinator-method calls.
-5. Install and verify from the rebased tree:
+4. If upstream rewrote a test file, keep only relevant safeguard regression
+   tests in the current upstream test style: drive setup through the
+   `AIOSysbus` mock and real config-entry/platform setup. Do not use
+   `object.__new__`, fake coordinators, or direct coordinator-method calls.
+5. Install and verify from the merged tree:
 
    ```bash
    uv sync
@@ -291,20 +260,20 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
    CMake must be installed for `pycares` during `uv sync`. Require the complete
    test suite to pass with coverage at or above 85%; run both pytest and prek
-   before updating the branch.
+   before pushing the branch.
 
-6. Check the safeguard symbols and test names after the rebase. For example:
+6. Check the safeguard symbols and test names after the merge. For example:
 
    ```bash
-   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_migrate_wan_access_unique_ids|async_get_device_by_identifier|async_get_device\\(identifiers|get_parent_device_identifier|Funbox6|normalize_display_devices|normalize_options' custom_components/livebox
+   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_migrate_wan_access_unique_ids|async_get_device_by_identifier|get_parent_device_id|Funbox6' custom_components/livebox
    ```
 
    Also confirm the protecting test names listed above still exist and update
    this inventory if behavior or test names changed.
 
-7. Confirm GitHub Compare/ForkUpstreamMonitor reports `behind_by=0`. Only after
-   checks pass, force-push the rebased `master` (prefer
-   `git push --force-with-lease origin master`).
+7. Finish when `git rev-list --left-right --count <tag>...origin/master`
+   prints `0 <ahead>` after the ancestry-preserving sync reaches
+   `origin/master`. Push sync branches normally; never force-push.
 
 ## Deployment note
 

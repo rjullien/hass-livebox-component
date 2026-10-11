@@ -31,9 +31,7 @@ CONF_TRACKING_TIMEOUT = "timeout_tracking"
 DEFAULT_TRACKING_TIMEOUT = 300
 
 CONF_DISPLAY_DEVICES = "device_tracker_mode"
-DEFAULT_DISPLAY_DEVICES = "Active"
-# Accepted by the options selector. Legacy stored value "Active only" is migrated.
-DISPLAY_DEVICES_OPTIONS = ("All", "Active")
+DEFAULT_DISPLAY_DEVICES = "Active only"
 
 UPLOAD_ICON = "mdi:upload-network"
 DOWNLOAD_ICON = "mdi:download-network"

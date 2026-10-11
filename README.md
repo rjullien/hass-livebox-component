@@ -3,11 +3,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/rjullien/hass-livebox-component?style=for-the-badge)](https://github.com/rjullien/hass-livebox-component/releases)
 [![GitHub Activity](https://img.shields.io/github/commit-activity/y/rjullien/hass-livebox-component?style=for-the-badge)](https://github.com/rjullien/hass-livebox-component/commits/master)
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz)
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2025.5.0%2B-blue?style=for-the-badge)](https://www.home-assistant.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2026.8.0%2B-blue?style=for-the-badge)](https://www.home-assistant.io/)
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Aligned with upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **v2.6.0** (commit `30c75a0`), fork release **2.6.0.3**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
+> **Fork status:** Based on upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **2.6.1-beta4** (commit `0e7fb0a`, beta), fork release **2.6.1.1**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
 >
 > **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.6.0.1` = upstream 2.6.0, fork rev 1).
 >
@@ -17,30 +17,18 @@ Custom component for [Home Assistant](https://www.home-assistant.io/) to observe
 
 |                    | Minimum (runtime)               | Tested in CI      |
 | ------------------ | ------------------------------- | ----------------- |
-| **Home Assistant** | **2025.5.0**                    | 2026.7.2          |
+| **Home Assistant** | **2026.8.0**                    | 2026.10.0         |
 | **Python**         | _(bundled with HA — see below)_ | 3.14.2 (dev only) |
-| **aiosysbus**      | **1.2.5**                       | 1.2.5             |
+| **aiosysbus**      | **1.2.6**                       | 1.2.6             |
 
 ### Minimum Home Assistant version
 
-**2025.5.0** — declared by upstream in `hacs.json`, consistent with the code:
-
-- `AddConfigEntryEntitiesCallback` (calendar platform) exists since HA **2025.3.0**
-- `async_step_reconfigure` (config flow) exists since HA **2024.12**
-- upstream bumped the declared minimum from `2024.1.0` → `2025.5.0` in Oct 2025
-
-The fork does not introduce APIs that require a version above 2025.5.0.
+**2026.8.0** — declared by upstream in `hacs.json`.
 
 ### Python — what users actually need
 
-You do **not** install Python for this integration. Home Assistant Core ships its own Python runtime.
-
-| Your Home Assistant version | Python bundled by HA Core |
-| --------------------------- | ------------------------- |
-| 2025.5.0 – 2026.2.x         | **3.13.2+**               |
-| 2026.3.0 and newer          | **3.14.2+**               |
-
-So with the declared minimum **HA 2025.5.0**, you need a HA install that already runs on **Python 3.13.2+** (OS / Container / Supervised — HA handles this).
+You do **not** install Python for this integration; Home Assistant Core ships its
+own Python runtime.
 
 **Python 3.14.2** in `pyproject.toml` applies only to **local development** (`uv sync`, pytest, lint) — not to end users installing via HACS.
 
@@ -118,7 +106,7 @@ uv run pytest
 uv run prek run --all-files
 ```
 
-CI runs on Python 3.14 with Home Assistant **2026.7.2** (via `pytest-homeassistant-custom-component`).
+CI runs on Python 3.14 with Home Assistant **2026.10.0** (via `pytest-homeassistant-custom-component`).
 
 ## Upstream
 
@@ -127,6 +115,14 @@ Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/ha
 Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
 
 ## Changelog (fork)
+
+### 2.6.1.1
+
+- Sync upstream **2.6.1-beta4** (`0e7fb0a`, beta) and pin `aiosysbus` 1.2.6
+- Take upstream repeater `via_device`, “Active only” option, uptime icon, rolling-counter and overlapping-calendar fixes
+- Use upstream `aiosysbus` logout; retain changed-only session persistence, orphan-session cleanup after restart, and stale-token invalidation
+- Keep the 24-hour topology scan interval when no repeaters are present
+- Raise the declared minimum Home Assistant version to 2026.8.0
 
 ### 2.6.0.4
 
@@ -193,13 +189,11 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 Fork fixes proposed to cyr-ius/hass-livebox-component, one problem per PR, at most one new PR per week and only after earlier ones got an answer. Each branch is based on `upstream/master`; the PR text to paste is in `upstream-prs/`. The Devin token cannot open PRs upstream: the owner opens them from the compare link. The weekly Devin check updates the Status column.
 
-| PR                                                 | Branch                                                                                                                                                                 | Text                                                | Status                                                                                                                                                              |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Session logout (`X-Sah-Logout` + `releaseContext`) | [upstream/fix-session-logout](https://github.com/cyr-ius/hass-livebox-component/compare/master...rjullien:hass-livebox-component:upstream/fix-session-logout?expand=1) | [session-logout.md](upstream-prs/session-logout.md) | Validated — no issue after 1 day in service on cam (since 2026-10-10); upstream PR: [open, cyr-ius#352](https://github.com/cyr-ius/hass-livebox-component/pull/352) |
-| Uptime icon `mdi:` prefix                          | [upstream/fix-uptime-icon](https://github.com/cyr-ius/hass-livebox-component/compare/master...rjullien:hass-livebox-component:upstream/fix-uptime-icon?expand=1)       | [uptime-icon.md](upstream-prs/uptime-icon.md)       | Validated — no issue after 1 day in service on cam (since 2026-10-10); upstream PR: [open, cyr-ius#353](https://github.com/cyr-ius/hass-livebox-component/pull/353) |
-| Topology scan every 24 h when no repeater          | —                                                                                                                                                                      | —                                                   | Planned                                                                                                                                                             |
-| Repeater device created before re-linking clients  | —                                                                                                                                                                      | —                                                   | Planned (refusal by HA not reproduced yet)                                                                                                                          |
-| "Active only" option value migrated to "Active"    | —                                                                                                                                                                      | —                                                   | Planned                                                                                                                                                             |
+| PR                                                 | Branch | Text                                                | Status                                                                                                                                                                                |
+| -------------------------------------------------- | ------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session logout (`X-Sah-Logout` + `releaseContext`) | —      | [session-logout.md](upstream-prs/session-logout.md) | cyr-ius#352 closed; reimplemented upstream through `aiosysbus 1.2.6` and cyr-ius#354 in `2.6.1-beta1`; feedback tracked in cyr-ius#356. The fork retains only orphan-session release. |
+| Uptime icon `mdi:` prefix                          | —      | [uptime-icon.md](upstream-prs/uptime-icon.md)       | Merged upstream as cyr-ius#353 on 2026-10-10; included in `2.6.1-beta`.                                                                                                               |
+| Topology scan every 24 h when no repeater          | —      | —                                                   | Fork safeguard retained.                                                                                                                                                              |
 
 Already merged upstream: #298, #299, #300 (2.6.0).
 
@@ -211,12 +205,6 @@ Already merged upstream: #298, #299, #300 (2.6.0).
 negligible (a few hundred bytes per call), the cache is cleared on reboot, and
 the owner's line receives practically no calls. The 30-day pruning was removed
 in 2.6.0.3 to avoid diverging from upstream; do not re-add it.
-
-### Rolling 32-bit counters
-
-Rolling counter state is shared across config entries, so totals can be wrong
-when two or more Liveboxes are configured in the same Home Assistant. The owner
-has one Livebox, so this is accepted to avoid diverging from upstream.
 
 ### Unknown Livebox ProductClass
 

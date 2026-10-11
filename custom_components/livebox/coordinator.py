@@ -1,7 +1,6 @@
 """Coordinator for Livebox."""
 
-from __future__ import annotations
-
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -12,10 +11,9 @@ from aiosysbus.exceptions import AiosysbusException, HttpRequestFailed
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, CONF_USERNAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import (
-    async_create_clientsession,
-    async_get_clientsession,
-)
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import DEFAULT_TIME_ZONE, UTC
@@ -30,11 +28,12 @@ from .const import (
     DEFAULT_WIFI_TRACKING,
     DOMAIN,
 )
-from .helpers import find_item, normalize_display_devices
-from .session import LiveboxSessionStore, async_logout_session
+from .helpers import find_item
+from .session import LiveboxSessionStore
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=1)
+LOGOUT_TIMEOUT = 10
 TOPOLOGY_SCAN_INTERVAL = timedelta(minutes=5)
 TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS = timedelta(hours=24)
 TOPOLOGY_BUILD_TIMEOUT = 30
@@ -100,42 +99,19 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Failed to persist session", exc_info=True)
 
     async def async_logout(self) -> None:
-        """Logout from the Livebox to release the API session slot."""
-        self._persisted_session = None
-
+        """Release the session, the Livebox accepts a limited number of them."""
         try:
-            auth = self.api._auth
-            token = auth.session_token
-            cookies = auth._cookies
-            if (
-                isinstance(token, str)
-                and token
-                and isinstance(cookies, dict)
-                and cookies
-            ):
-                session = async_get_clientsession(self.hass)
-                base_url = str(auth.base_url)
-                verify_tls = getattr(auth, "verify_tls", True)
-                success = await async_logout_session(
-                    session,
-                    base_url,
-                    token,
-                    {str(k): str(v) for k, v in cookies.items()},
-                    verify_tls=bool(verify_tls),
-                )
-                if success:
-                    auth.session_token = None
-                    auth._cookies = {}
-                    _LOGGER.info("Logged out from Livebox")
-        except Exception:  # noqa: BLE001
-            _LOGGER.debug("Logout failed", exc_info=True)
-
-        # Clear persisted session
-        try:
-            store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
-            await store.async_clear()
-        except Exception:  # noqa: BLE001
-            _LOGGER.debug("Failed to clear session store", exc_info=True)
+            async with asyncio.timeout(LOGOUT_TIMEOUT):
+                await self.api.async_logout()
+        except (AiosysbusException, TimeoutError) as error:
+            _LOGGER.debug("Failed to release the Livebox session: %s", error)
+        finally:
+            self._persisted_session = None
+            try:
+                store = LiveboxSessionStore(self.hass, self.config_entry.entry_id)
+                await store.async_clear()
+            except Exception:  # noqa: BLE001
+                _LOGGER.debug("Failed to clear session store", exc_info=True)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data."""
@@ -212,8 +188,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 "topology_repeaters": topology_repeaters,
                 "lan": await self.async_get_lan(devices),
                 "upnp": await self.async_get_port_forwarding(),
-                "dhcp_leases": await self.async_get_dhcp_leases(),
-                "guest_dhcp_leases": await self.async_get_dhcp_leases("guest"),
+                **await self.async_get_dhcp_leases(),
                 "stats": await self.async_get_results(),
             }
         except AiosysbusException as error:
@@ -242,10 +217,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         """Get all devices."""
         devices_tracker = {}
         device_counters = {"wireless": 0, "wired": 0}
-        mode = normalize_display_devices(
-            self.config_entry.options.get(CONF_DISPLAY_DEVICES)
-        )
-        if mode == "All":
+        if self.config_entry.options.get(CONF_DISPLAY_DEVICES) == "All":
             parameters = {
                 "expression": {
                     "wifi": (
@@ -365,6 +337,21 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         self._topology_cache = (topology_via_device, topology_repeaters)
         return self._topology_cache
 
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info of the Livebox itself."""
+        infos = (self.data or {}).get("infos", {})
+        entry_data = self.config_entry.data
+        scheme = "https" if entry_data.get(CONF_USE_TLS) else "http"
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.unique_id or DOMAIN)},
+            manufacturer=infos.get("Manufacturer"),
+            model=infos.get("ModelName"),
+            name=infos.get("ProductClass", DOMAIN.capitalize()),
+            sw_version=infos.get("SoftwareVersion"),
+            configuration_url=f"{scheme}://{entry_data.get(CONF_HOST)}:{entry_data.get(CONF_PORT)}",
+        )
+
     def get_parent_device_identifier(self, device_key: str | None) -> tuple[str, str]:
         """Return the parent device identifier for a tracked device."""
         unique_id = self.unique_id or DOMAIN
@@ -374,6 +361,13 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             if isinstance(parent_key, str):
                 return (DOMAIN, parent_key)
         return (DOMAIN, unique_id)
+
+    def get_parent_device_id(self, device_key: str | None) -> str | None:
+        """Return the registry id of the parent device of a tracked device."""
+        parent = dr.async_get(self.hass).async_get_device_by_identifier(
+            self.get_parent_device_identifier(device_key), self.config_entry.entry_id
+        )
+        return parent.id if parent is not None else None
 
     def get_repeater_name(self, device_key: str | None) -> str | None:
         """Return the repeater name for a tracked device, if any."""
@@ -400,7 +394,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 continue
             try:
                 utc_dt = datetime.strptime(start_time, "%Y-%m-%dT%H:%M:%SZ")
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 _LOGGER.debug("Skipping call with unparsable startTime: %s", start_time)
                 continue
             local_dt = utc_dt.replace(tzinfo=UTC).astimezone(tz=DEFAULT_TIME_ZONE)
@@ -474,12 +468,20 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
             optical = (
                 await self._make_request(self.api.sgcomci.async_get_optical)
             ).get("status", {})
+
+            def _float(key: str) -> float:
+                # Empty or null while the fiber link is down.
+                try:
+                    return float(optical.get(key) or 0)
+                except TypeError, ValueError:
+                    return 0.0
+
             return {
-                "SignalTxPower": float(optical.get("PowerTx", 0)) * 1000,
-                "SignalRxPower": float(optical.get("PowerRx", 0)) * 1000,
-                "Temperature": float(optical.get("Temperature", 0)),
-                "Voltage": float(optical.get("Vcc", 0)),
-                "Bias": float(optical.get("BiasCurrent", 0)),
+                "SignalTxPower": _float("PowerTx") * 1000,
+                "SignalRxPower": _float("PowerRx") * 1000,
+                "Temperature": _float("Temperature"),
+                "Voltage": _float("Vcc"),
+                "Bias": _float("BiasCurrent"),
             }
 
         parameters = {"mibs": "gpon"}
@@ -607,7 +609,8 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def async_detect_new_dvices(self, devices) -> None:
         """New devices detected."""
-        if self.data and self.data.get("devices"):
+        # On the first refresh, platforms create entities from the returned data.
+        if self.data is not None:
             for key in devices:
                 if key not in self.data.get("devices", {}):
                     self.data["devices"] = devices
@@ -635,17 +638,24 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
 
         return ports
 
-    async def async_get_dhcp_leases(
-        self, domain: str = "default"
-    ) -> list[dict[str, Any]]:
-        """Get dhcp leases."""
+    async def async_get_dhcp_leases(self) -> dict[str, list[dict[str, Any]]]:
+        """Get dhcp leases of the default and guest pools."""
         if self.model == 5656:
-            return []
+            return {"dhcp_leases": [], "guest_dhcp_leases": []}
 
-        data = (await self._make_request(self.api.dhcp.async_get_dhcp_pool)).get(
+        pools = (await self._make_request(self.api.dhcp.async_get_dhcp_pool)).get(
             "status", {}
         )
-        if data.get(domain, {}).get("Enable", False) is False:
+        return {
+            "dhcp_leases": await self._async_get_pool_leases(pools, "default"),
+            "guest_dhcp_leases": await self._async_get_pool_leases(pools, "guest"),
+        }
+
+    async def _async_get_pool_leases(
+        self, pools: dict[str, Any], domain: str
+    ) -> list[dict[str, Any]]:
+        """Get the leases of an enabled dhcp pool."""
+        if pools.get(domain, {}).get("Enable", False) is False:
             return []
 
         data = (

@@ -1,9 +1,8 @@
 """Config flow to configure Livebox."""
 
-from __future__ import annotations
-
 import logging
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import Any
 
 import voluptuous as vol
@@ -37,10 +36,8 @@ from .const import (
     DEFAULT_TRACKING_TIMEOUT,
     DEFAULT_USERNAME,
     DEFAULT_WIFI_TRACKING,
-    DISPLAY_DEVICES_OPTIONS,
     DOMAIN,
 )
-from .helpers import normalize_display_devices, normalize_options
 
 DATA_SCHEMA = vol.Schema(
     {
@@ -72,17 +69,17 @@ class LiveboxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> tuple[dict[str, Any] | None, dict[str, str]]:
         """Validate user credentials against the Livebox."""
         errors: dict[str, str] = {}
+        api: Any = AIOSysbus(
+            username=user_input[CONF_USERNAME],
+            password=user_input[CONF_PASSWORD],
+            session=async_create_clientsession(self.hass),
+            host=user_input[CONF_HOST],
+            port=user_input[CONF_PORT],
+            use_tls=user_input[CONF_USE_TLS],
+            verify_tls=user_input[CONF_VERIFY_TLS],
+        )
 
         try:
-            api: Any = AIOSysbus(
-                username=user_input[CONF_USERNAME],
-                password=user_input[CONF_PASSWORD],
-                session=async_create_clientsession(self.hass),
-                host=user_input[CONF_HOST],
-                port=user_input[CONF_PORT],
-                use_tls=user_input[CONF_USE_TLS],
-                verify_tls=user_input[CONF_VERIFY_TLS],
-            )
             await api.async_connect()
             await api.async_get_permissions()
             infos = await api.deviceinfo.async_get_deviceinfo()
@@ -106,6 +103,10 @@ class LiveboxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 return infos, errors
 
             errors["base"] = "cannot_connect"
+        finally:
+            # The integration opens its own session once set up.
+            with suppress(AiosysbusException):
+                await api.async_logout()
 
         return None, errors
 
@@ -136,8 +137,11 @@ class LiveboxFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(sn)
                 self._abort_if_unique_id_configured()
 
+                product_class = infos["status"].get("ProductClass") or (
+                    DOMAIN.capitalize()
+                )
                 return self.async_create_entry(
-                    title=f"{infos.get('ProductClass', DOMAIN.capitalize())} ({sn})",
+                    title=f"{product_class} ({sn})",
                     data=user_input,
                 )
 
@@ -189,11 +193,7 @@ class LiveboxOptionsFlowHandler(config_entries.OptionsFlowWithReload):
     ) -> ConfigFlowResult:
         """Handle a flow initialized by the user."""
         if user_input:
-            return self.async_create_entry(title="", data=normalize_options(user_input))
-
-        # Normalize suggested values so legacy "Active only" maps to "Active"
-        # without persisting yet (setup migrates on load; save persists here).
-        options = normalize_options(self.config_entry.options)
+            return self.async_create_entry(title="", data=user_input)
 
         return self.async_show_form(
             step_id="init",
@@ -209,16 +209,16 @@ class LiveboxOptionsFlowHandler(config_entries.OptionsFlowWithReload):
                         vol.Required(
                             CONF_TRACKING_TIMEOUT, default=DEFAULT_TRACKING_TIMEOUT
                         ): int,
-                        # Normalize legacy "Active only" before In() so saves
-                        # succeed; vol.In remains serializable for the selector UI.
                         vol.Required(
                             CONF_DISPLAY_DEVICES, default=DEFAULT_DISPLAY_DEVICES
-                        ): vol.All(
-                            normalize_display_devices,
-                            vol.In(list(DISPLAY_DEVICES_OPTIONS)),
-                        ),
+                        ): vol.In(["All", DEFAULT_DISPLAY_DEVICES]),
                     },
                 ),
-                options,
+                {
+                    **self.config_entry.options,
+                    CONF_DISPLAY_DEVICES: "All"
+                    if self.config_entry.options.get(CONF_DISPLAY_DEVICES) == "All"
+                    else DEFAULT_DISPLAY_DEVICES,
+                },
             ),
         )

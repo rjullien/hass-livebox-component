@@ -1,7 +1,5 @@
 """Support for the Livebox platform."""
 
-from __future__ import annotations
-
 import logging
 import re
 from datetime import datetime, timedelta
@@ -10,7 +8,6 @@ from typing import Any, cast
 from homeassistant.components.device_tracker.const import SourceType
 from homeassistant.components.device_tracker.entity import ScannerEntity
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import EntityDescription
@@ -169,7 +166,6 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
         super().__init__(coordinator, description)
         self._device = device
         self._device_key = cast(str | None, device.get("Key"))
-        self._via_device = coordinator.get_parent_device_identifier(self._device_key)
         self._old_status = datetime.today()
         self._attr_is_connected = device.get("Active", False)
         self._attr_source_type = SourceType.ROUTER
@@ -258,7 +254,7 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
         return DeviceInfo(
             name=self._device.get("Name"),
             identifiers={(DOMAIN, device_identifier)},
-            via_device=self._via_device,
+            via_device_id=self.coordinator.get_parent_device_id(self._device_key),
         )
 
     @callback
@@ -272,44 +268,5 @@ class LiveboxDeviceScannerEntity(  # pyrefly: ignore[inconsistent-inheritance]
         # rather than keeping the last known state indefinitely. Doing so
         # cleanly requires touching the entity registry and is deferred.
         self._attr_ip_address = self._device.get("IPAddress")
-        via_device = self.coordinator.get_parent_device_identifier(self._device_key)
-        if via_device != self._via_device and self.device_entry is not None:
-            # Re-link the existing device when topology becomes available later.
-            # device_info alone does not reliably refresh via_device on an
-            # existing registry entry, so update the device registry explicitly.
-            registry = dr.async_get(self.hass)
-            # New repeaters may still be awaiting entity setup in the same
-            # refresh that first exposes topology_via_device. Ensure the
-            # parent exists before linking, otherwise HA rejects via_device.
-            get_by_identifier = getattr(
-                registry, "async_get_device_by_identifier", None
-            )
-            parent = (
-                get_by_identifier(via_device, self.coordinator.config_entry.entry_id)
-                if get_by_identifier is not None
-                else registry.async_get_device(identifiers={via_device})
-            )
-            if parent is None:
-                repeater_name = self.coordinator.data.get("topology_repeaters", {}).get(
-                    via_device[1]
-                )
-                if repeater_name is None:
-                    # Parent not ready and not a known repeater — keep the
-                    # previous via_device so a later refresh can retry.
-                    self.async_write_ha_state()
-                    return
-                registry.async_get_or_create(
-                    config_entry_id=self.coordinator.config_entry.entry_id,
-                    identifiers={via_device},
-                    name=repeater_name,
-                    via_device=(DOMAIN, self.coordinator.unique_id or DOMAIN),
-                )
-            self._via_device = via_device
-            registry.async_get_or_create(
-                config_entry_id=self.coordinator.config_entry.entry_id,
-                **cast(DeviceInfo, self.device_info),
-            )
-        else:
-            self._via_device = via_device
-
+        self._async_update_via_device(self._device_key)
         self.async_write_ha_state()
