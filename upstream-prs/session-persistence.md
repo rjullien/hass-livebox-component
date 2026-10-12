@@ -31,7 +31,7 @@ remote, unattended install cannot recover from alone.
   clean stop does not leave a stale context to be released at the next boot.
 - **Re-authenticate after transport failure:** on a top-level
   `HttpRequestFailed`, clear `session_token` so the next poll logs in again.
-  Deliberately scoped to the *top-level* failure path only: clearing the token
+  Deliberately scoped to the _top-level_ failure path only: clearing the token
   on every individual endpoint error caused a login storm inside a single
   polling cycle (seen on the fork, commit `fb7a9bc`).
 
