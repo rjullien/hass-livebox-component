@@ -1,21 +1,16 @@
-Title: fix(session): survive crashes and re-authenticate after transport failures
+Title: fix(session): release sessions orphaned by a crash or power loss
 
 ## Problem
 
 `2.6.1-beta` (PR #354 + aiosysbus 1.2.6) releases the Livebox session on a clean
-unload, HA stop and config-flow abort — thank you for that. Two gaps remain:
+unload, HA stop and config-flow abort — thank you for that. One gap remains:
 
-1. **A crash or power loss never reaches `async_unload`.** The context stays
-   open on the router until it expires. The Livebox session table is small, so
-   a few unclean restarts (or a stormy night at a rural site) can exhaust it
-   and the API stops accepting logins until sessions time out.
-2. **After a transport failure the stale token is reused.** When a poll dies
-   with `HttpRequestFailed` (connection reset, empty reply), the next cycle
-   retries with the same session token. If the router already dropped it, the
-   entry keeps erroring instead of logging in again.
-
-Both are rare per-day but deterministic over months, exactly the failures a
-remote, unattended install cannot recover from alone.
+**A crash or power loss never reaches `async_unload`.** The context stays open
+on the router until it expires. The Livebox session table is small, so a few
+unclean restarts (or a stormy night at a rural site) can exhaust it and the
+API stops accepting logins until sessions time out. Rare per-day, but
+deterministic over months — exactly the failure a remote, unattended install
+cannot recover from alone.
 
 ## Proposal
 
@@ -29,11 +24,6 @@ remote, unattended install cannot recover from alone.
   blocks setup.
 - **Clear the store on clean unload**, after `api.async_logout()` runs — a
   clean stop does not leave a stale context to be released at the next boot.
-- **Re-authenticate after transport failure:** on a top-level
-  `HttpRequestFailed`, clear `session_token` so the next poll logs in again.
-  Deliberately scoped to the _top-level_ failure path only: clearing the token
-  on every individual endpoint error caused a login storm inside a single
-  polling cycle (seen on the fork, commit `fb7a9bc`).
 
 ## Tested on a real router
 
@@ -50,8 +40,7 @@ Livebox Fibre (Arcadyan), firmware `ARFI-fr-G06.R06.C01_12`:
 
 Orphan release attempted at setup and store cleared afterwards; store
 save/load/clear roundtrip; persistence writes only when credentials change;
-clean unload clears the store; `HttpRequestFailed` clears the token so the
-next refresh re-authenticates.
+clean unload clears the store.
 
 This is what `rjullien/hass-livebox-component` has been running in production
 for months; happy to adapt the patch to whatever shape you prefer in aiosysbus
