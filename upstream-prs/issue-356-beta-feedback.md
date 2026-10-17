@@ -3,9 +3,9 @@ Beta feedback for https://github.com/cyr-ius/hass-livebox-component/issues/356
 
 ---
 
-Thanks for the beta — running `2.6.1-beta4` (aiosysbus 1.2.6) since
-2026-10-11 on a Livebox Fibre (Arcadyan, firmware `ARFI-fr-G06.R06.C01_12`),
-Home Assistant 2026.9.3. [Update the day count before posting.]
+Thanks for the beta — running `2.6.1-beta4` (aiosysbus 1.2.6) for 6 days
+(since 2026-10-11) on a Livebox Fibre (Arcadyan, firmware
+`ARFI-fr-G06.R06.C01_12`), Home Assistant 2026.9.3.
 
 So far everything looks good on my side:
 
