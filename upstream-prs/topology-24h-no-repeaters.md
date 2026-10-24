@@ -21,7 +21,8 @@ returned between rebuilds; the first scan at setup is unchanged, so new
 repeaters are picked up within a day at worst.
 
 This is behaviour-preserving for everyone with a mesh, and purely reduces
-router load for everyone without one.
+router load for everyone without one. Failed builds are rate-limited the same
+way, instead of being retried on every polling cycle.
 
 ## Tested on a real router
 
