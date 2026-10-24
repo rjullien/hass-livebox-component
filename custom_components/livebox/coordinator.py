@@ -242,9 +242,22 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                     ),
                 }
             }
-        devices = (
-            await self._make_request(self.api.devices.async_get_devices, parameters)
-        ).get("status", {})
+        try:
+            devices = (await self.api.devices.async_get_devices(parameters)).get(
+                "status", {}
+            )
+        except AiosysbusException as error:
+            _LOGGER.warning(
+                "Failed to fetch device list; retaining previous data: %s", error
+            )
+            previous_data = self.data or {}
+            return (
+                previous_data.get("devices", {}),
+                {
+                    "wireless": previous_data.get("count_wireless_devices", 0),
+                    "wired": previous_data.get("count_wired_devices", 0),
+                },
+            )
         _LOGGER.debug("Fetch Devices: %s", devices)
         if wifi_tracking:
             device_counters["wireless"] = len(devices.get("wifi", {}))

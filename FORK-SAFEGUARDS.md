@@ -233,6 +233,23 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   it manually, and keep the manifest's integration version synchronized with
   the README fork changelog.
 
+### 12. Retain device state when the device-list read fails
+
+- **What:** When `Devices.async_get_devices` raises `AiosysbusException`,
+  `async_get_devices` returns the prior device list and counters from
+  coordinator data, or empty defaults before the first successful read. A
+  successful empty response remains a valid empty device list.
+- **Why:** `_make_request` converts endpoint exceptions to `{}`, which otherwise
+  makes a transient device-list failure look like a successful empty response
+  and marks tracked devices away.
+- **Where:** `coordinator.py::LiveboxDataUpdateCoordinator.async_get_devices`.
+- **Protecting tests:** `tests/test_device_tracker.py::test_device_tracker_retains_last_state_when_device_read_fails`,
+  `test_initial_device_read_failure_uses_empty_defaults`, and
+  `test_legitimately_empty_device_list_clears_previous_data`.
+- **Merge pitfalls:** Keep this exception handling scoped to the device-list
+  read; do not change `_make_request` behavior for other endpoints. Do not
+  retain old state for a successful empty response.
+
 ## Upstream sync procedure
 
 1. Keep the previous released fork state under its existing `vX.Y.Z.N` tag;
