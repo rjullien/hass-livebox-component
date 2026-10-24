@@ -35,6 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=1)
 LOGOUT_TIMEOUT = 10
 TOPOLOGY_SCAN_INTERVAL = timedelta(minutes=5)
+TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS = timedelta(hours=24)
 TOPOLOGY_BUILD_TIMEOUT = 30
 
 
@@ -236,6 +237,14 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
 
         return devices_tracker, device_counters
 
+    def _topology_scan_interval(self) -> timedelta:
+        """Rebuild often only when the mesh has repeaters to roam between."""
+        return (
+            TOPOLOGY_SCAN_INTERVAL
+            if self._topology_cache[1]
+            else TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS
+        )
+
     async def async_get_topology(self) -> tuple[dict[str, str], dict[str, str]]:
         """Build a device-to-repeater map from topology diagnostics."""
         now = datetime.now(tz=UTC)
@@ -243,9 +252,10 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         # whether a client roamed: rebuild periodically instead.
         if (
             self._topology_cache_at is not None
-            and now - self._topology_cache_at < TOPOLOGY_SCAN_INTERVAL
+            and now - self._topology_cache_at < self._topology_scan_interval()
         ):
             return self._topology_cache
+        self._topology_cache_at = now
 
         topo_status = (
             await self._make_request(self.api.topologydiagnostics.async_get_topodiags)
