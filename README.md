@@ -7,7 +7,7 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Based on upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **2.6.1-beta4** (commit `0e7fb0a`, beta), fork release **2.6.1.1**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
+> **Fork status:** Based on upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **2.6.1** (commit `8503c7f`), fork release **2.6.1.2**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
 >
 > **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.6.0.1` = upstream 2.6.0, fork rev 1).
 >
@@ -115,6 +115,11 @@ Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/ha
 Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
 
 ## Changelog (fork)
+
+### 2.6.1.2
+
+- Retain last-known device trackers and counters for three consecutive failed device reads; the fourth fails the update, successful reads reset the cap, and a successful empty response still clears the data
+- Merge upstream `master` through `8503c7f`, including #360 transport-failure reauthentication and tooling updates, while preserving fork safeguards
 
 ### 2.6.1.1
 
