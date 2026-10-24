@@ -238,9 +238,11 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **What:** When `Devices.async_get_devices` raises `AiosysbusException`,
   `async_get_devices` returns the prior device list and counters from
   coordinator data, or empty defaults before the first successful read, for at
-  most three consecutive failures. The fourth failure raises `UpdateFailed`;
-  any successful read resets the counter. A successful empty response remains
-  a valid empty device list.
+  most three consecutive failures. The fourth failure raises `UpdateFailed`,
+  making every integration entity unavailable through `CoordinatorEntity`.
+  Consumers must treat an unavailable tracker as unknown, not away. Any
+  successful read resets the counter. A successful empty response remains a
+  valid empty device list.
 - **Why:** `_make_request` converts endpoint exceptions to `{}`, which otherwise
   makes a transient device-list failure look like a successful empty response
   and marks tracked devices away.
