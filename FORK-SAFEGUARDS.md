@@ -1,11 +1,11 @@
 # Fork safeguards for upstream syncs
 
-This inventory was checked against `git diff 2.6.1-beta4...HEAD`, where
-`2.6.1-beta4` (`0e7fb0a`) is the upstream base and `HEAD` is fork release
-`2.6.1.1`. The entries below account for the fork's remaining code, test,
-workflow, and tooling differences. Reasons are grounded in the fork changelog,
-linked issues, or owner-provided operating context; anything not documented is
-marked explicitly rather than inferred.
+This inventory tracks the fork-specific safeguards on release `2.6.1.2`,
+following the merge of upstream `master` at `8503c7f`. Behaviors aligned with
+upstream are marked explicitly; the remaining entries account for the fork's
+code, test, workflow, and tooling differences. Reasons are grounded in the
+fork changelog, linked issues, or owner-provided operating context; anything
+not documented is marked explicitly rather than inferred.
 
 See the README's [Upstream contributions](README.md#upstream-contributions) section for current proposals and status.
 
@@ -17,9 +17,10 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   verification setting after successful polling, but write only when that
   tuple changes. Use upstream `aiosysbus 1.2.6` logout on unload, HA stop,
   failed first refresh, and config flow. Before setup, attempt to release a
-  persisted orphan left by a crash or power loss. On a top-level
-  `HttpRequestFailed`, clear the in-memory session token so the next polling
-  cycle can authenticate again.
+  persisted orphan left by a crash or power loss.
+- **Upstream alignment:** Upstream #360 now clears the in-memory session token
+  after a top-level `HttpRequestFailed`, allowing the next polling cycle to
+  authenticate again. This behavior is no longer a fork-only divergence.
 - **Logout mechanism:** Upstream `self.api.async_logout()` handles normal
   logout. Orphan cleanup posts to the stored `/ws` URL with session cookies,
   `Authorization: X-Sah-Logout <context_id>`, content type
@@ -38,7 +39,8 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Where:** `session.py::LiveboxSessionStore` and
   `session.py::async_logout_session`; `coordinator.py::async_persist_session`,
   `coordinator.py::async_logout`, and
-  `LiveboxDataUpdateCoordinator._async_update_data`;
+  `LiveboxDataUpdateCoordinator._async_update_data` (including upstream
+  reauthentication after `HttpRequestFailed`);
   `__init__.py::_async_logout_orphaned_session` and `async_setup_entry`.
 - **Protecting tests:** `tests/test_session.py::test_logout_session_success`,
   `test_logout_session_failure_payload`, `test_logout_session_failure_status`,
@@ -52,13 +54,14 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   Livebox Fibre. Preserve the `X-Sah-Logout` header and `releaseContext` body,
   and pass the stored context ID with the cookies and TLS setting for orphan
   logout. Keep storage scoped to the config entry. Stop platform polling
-  before logging out on unload. Keep token invalidation in the top-level
-  update failure path; the `f37b631` commit explains that clearing it for every
-  endpoint failure can trigger a login storm during one polling cycle. The
-  current tests do not directly assert token invalidation after
-  `HttpRequestFailed`; the persistence optimization is exercised by
-  `test_coordinator_persists_only_changed_session`. Preserve both paths when
-  changing coordinator error handling.
+  before logging out on unload. Keep upstream token invalidation in the
+  top-level update failure path; the `f37b631` commit explains that clearing it
+  for every endpoint failure can trigger a login storm during one polling
+  cycle. The upstream
+  `test_transport_failure_clears_token_and_next_refresh_reauthenticates` and
+  `test_non_transport_error_leaves_session_token` tests protect that behavior.
+  Preserve the separate fork session-persistence and orphan-cleanup paths
+  when changing coordinator error handling.
 
   **Operational note:** On René's real Livebox, startup can log
   `Failed to logout orphaned session (Livebox may be unreachable)`. This
@@ -212,19 +215,18 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
 - **What:** GitHub Actions workflows run HACS and stale handling for owner
   `rjullien`; release tags accept both `X.Y.Z` and fork `X.Y.Z.N`. Dependabot
-  checks GitHub Actions and `uv` weekly. `pyproject.toml` pins development
-  `aiosysbus==1.2.6`, requires `pytest-homeassistant-custom-component>=0.13.346`,
-  and targets Ruff at Python 3.14; `uv.lock` records those dependency and lock
-  format updates. The manifest points code ownership, documentation, and issue
-  tracking at the fork and carries version `2.6.1.1`. HACS declares minimum HA
+  checks GitHub Actions and `uv` weekly. The upstream Python 3.14 development
+  and lint configuration is kept in `pyproject.toml`, `.pre-commit-config.yaml`,
+  and `uv.lock`. The manifest points code ownership, documentation, and issue
+  tracking at the fork and carries version `2.6.1.2`. HACS declares minimum HA
   2026.8.0; README records fork status, versioning, and changelog.
 - **Why:** The README changelog documents the modern development stack,
   lockfile compatibility, and four-part versioning. Upstream now requires HA
   2026.8.0 and uses Python 3.14 syntax.
 - **Where:** `.github/dependabot.yml`;
-  `.github/workflows/hacs.yml`, `release.yml`, and `stale.yaml`;
-  `pyproject.toml`, `uv.lock`, `custom_components/livebox/manifest.json`, and
-  `README.md`.
+  `.github/workflows/check-lint.yml`, `hacs.yml`, `pytest.yml`, `release.yml`,
+  and `stale.yaml`; `.pre-commit-config.yaml`, `pyproject.toml`, `uv.lock`,
+  `custom_components/livebox/manifest.json`, and `README.md`.
 - **Protecting tests:** No unit test covers workflow or repository metadata.
   Validate these through `uv run prek run --all-files` and the repository's
   HACS/manifest CI checks.
