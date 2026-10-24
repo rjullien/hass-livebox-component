@@ -10,7 +10,9 @@ on the router until it expires. The Livebox session table is small, so a few
 unclean restarts (or a stormy night at a rural site) can exhaust it and the
 API stops accepting logins until sessions time out. Rare per-day, but
 deterministic over months — exactly the failure a remote, unattended install
-cannot recover from alone.
+cannot recover from alone. Concrete case: a Raspberry Pi 3 at a remote site,
+with short undervoltage events about once a day and an unclean power loss on
+2026-10-23.
 
 ## Proposal
 
@@ -42,6 +44,6 @@ Orphan release attempted at setup and store cleared afterwards; store
 save/load/clear roundtrip; persistence writes only when credentials change;
 clean unload clears the store.
 
-This is what `rjullien/hass-livebox-component` has been running in production
-for months; happy to adapt the patch to whatever shape you prefer in aiosysbus
+This is what `rjullien/hass-livebox-component` runs in production (re-applied
+on every upstream sync since 2.6.0); happy to adapt the patch to whatever shape you prefer in aiosysbus
 or the component.

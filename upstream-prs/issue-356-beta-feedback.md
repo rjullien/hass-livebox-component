@@ -3,8 +3,8 @@ Beta feedback for https://github.com/cyr-ius/hass-livebox-component/issues/356
 
 ---
 
-Thanks for the beta — running `2.6.1-beta4` (aiosysbus 1.2.6) for 6 days
-(since 2026-10-11) on a Livebox Fibre (Arcadyan, firmware
+Thanks for the beta — running `2.6.1-beta4` (aiosysbus 1.2.6) for two weeks
+(since 2026-10-11), now together with current `master` (incl. #360) on a Livebox Fibre (Arcadyan, firmware
 `ARFI-fr-G06.R06.C01_12`), Home Assistant 2026.9.3.
 
 So far everything looks good on my side:
@@ -18,7 +18,10 @@ One gap remains vs. the idea in my closed PR #352 — and it is the only part I
 still carry in my fork: **the logout only happens on a clean stop**. If HA
 crashes or the machine loses power, the session stays open on the router
 until it times out, and the Livebox session table is small — a few unclean
-restarts can exhaust it.
+restarts can exhaust it. This is not theoretical for me: the HA box is a
+Raspberry Pi 3 at a remote site, and its kernel log shows short undervoltage
+events about once a day, plus one unclean power loss on 2026-10-23 — none of
+those reach `async_unload`.
 
 The fix I run: persist the session (`context_id`, cookies, `base_url`,
 `verify_tls`) to `.storage` whenever it changes, and at setup release any
