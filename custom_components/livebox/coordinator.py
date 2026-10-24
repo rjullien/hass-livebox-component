@@ -35,6 +35,7 @@ from .session import LiveboxSessionStore
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=1)
 LOGOUT_TIMEOUT = 10
+MAX_CONSECUTIVE_DEVICE_READ_FAILURES = 3
 TOPOLOGY_SCAN_INTERVAL = timedelta(minutes=5)
 TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS = timedelta(hours=24)
 TOPOLOGY_BUILD_TIMEOUT = 30
@@ -53,6 +54,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
         self.config_entry: Any = config_entry
         self.api: Any
         self._persisted_session: tuple[str, dict[str, str], str, bool] | None = None
+        self._consecutive_device_read_failures = 0
 
         self.unique_id: str | None = None
         self.model: int | float | None = None
@@ -247,6 +249,15 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                 "status", {}
             )
         except AiosysbusException as error:
+            self._consecutive_device_read_failures += 1
+            if (
+                self._consecutive_device_read_failures
+                > MAX_CONSECUTIVE_DEVICE_READ_FAILURES
+            ):
+                raise UpdateFailed(
+                    "Device list read failed "
+                    f"{self._consecutive_device_read_failures} consecutive times"
+                ) from error
             _LOGGER.warning(
                 "Failed to fetch device list; retaining previous data: %s", error
             )
@@ -258,6 +269,7 @@ class LiveboxDataUpdateCoordinator(DataUpdateCoordinator):
                     "wired": previous_data.get("count_wired_devices", 0),
                 },
             )
+        self._consecutive_device_read_failures = 0
         _LOGGER.debug("Fetch Devices: %s", devices)
         if wifi_tracking:
             device_counters["wireless"] = len(devices.get("wifi", {}))
