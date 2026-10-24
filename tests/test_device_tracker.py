@@ -124,6 +124,51 @@ async def test_device_tracker_retains_last_state_when_device_read_fails(
 
 
 @pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_device_list_read_failure_limit_resets_after_success(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """The fourth failed device read fails the update; a success resets the cap."""
+    device = AIOSysbus.__devices["status"][69]
+    device["Key"] = "AA:BB:CC:DD:04:08"
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = config_entry.runtime_data
+    previous_data = coordinator.data
+    device_reader = AIOSysbus.devices.async_get_devices
+    successful_device_reader = device_reader.side_effect
+    device_reader.side_effect = AiosysbusException("temporary device-list failure")
+
+    for _ in range(3):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.last_update_success is True
+        assert coordinator.data["devices"] == previous_data["devices"]
+
+    state = hass.states.get("device_tracker.pc_408")
+    assert state is not None
+    assert state.state == STATE_HOME
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is False
+    assert coordinator.data["devices"] == previous_data["devices"]
+
+    device_reader.side_effect = successful_device_reader
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is True
+
+    device_reader.side_effect = AiosysbusException("temporary device-list failure")
+    for _ in range(3):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.last_update_success is True
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
 async def test_initial_device_read_failure_uses_empty_defaults(
     hass: HomeAssistant,
     config_entry: ConfigEntry,

@@ -118,7 +118,7 @@ Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://
 
 ### 2.6.1.2
 
-- Retain last-known device trackers and counters when the devices read fails; a successful empty response still clears them
+- Retain last-known device trackers and counters for three consecutive failed device reads; the fourth fails the update, successful reads reset the cap, and a successful empty response still clears the data
 
 ### 2.6.1.1
 
