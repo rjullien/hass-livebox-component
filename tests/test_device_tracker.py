@@ -5,6 +5,7 @@ from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aiosysbus.exceptions import AiosysbusException
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_HOME, STATE_NOT_HOME
@@ -67,7 +68,147 @@ async def test_device_tracker(
         state = hass.states.get("device_tracker.pc_408")
         assert state is not None
         assert state.state == STATE_NOT_HOME
-        assert state.attributes.get("ip") is None
+    assert state.attributes.get("ip") is None
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_device_tracker_retains_last_state_when_device_read_fails(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """A failed device-list read retains state until a successful inactive read."""
+    device = AIOSysbus.__devices["status"][69]
+    device["Key"] = "AA:BB:CC:DD:04:08"
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("device_tracker.pc_408")
+    assert state is not None
+    assert state.state == STATE_HOME
+
+    previous_data = config_entry.runtime_data.data
+    previous_devices = dict(previous_data["devices"])
+    previous_wireless_count = previous_data["count_wireless_devices"]
+    previous_wired_count = previous_data["count_wired_devices"]
+    coordinator = config_entry.runtime_data
+    device_reader = AIOSysbus.devices.async_get_devices
+    successful_device_reader = device_reader.side_effect
+    device_reader.side_effect = AiosysbusException("temporary device-list failure")
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    data = config_entry.runtime_data.data
+    state = hass.states.get("device_tracker.pc_408")
+    assert state is not None
+    assert state.state == STATE_HOME
+    assert data["devices"] == previous_devices
+    assert data["count_wireless_devices"] == previous_wireless_count
+    assert data["count_wired_devices"] == previous_wired_count
+
+    device_reader.side_effect = successful_device_reader
+    device["Active"] = False
+    device["IPAddress"] = None
+    with patch("custom_components.livebox.device_tracker.datetime") as mock_datetime:
+        mock_datetime.today.return_value = datetime(9999, 1, 1, 12, 0, 0)
+        mock_datetime.side_effect = lambda *a, **kw: datetime(*a, **kw)
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    data = config_entry.runtime_data.data
+    state = hass.states.get("device_tracker.pc_408")
+    assert state is not None
+    assert state.state == STATE_NOT_HOME
+    assert "AA:BB:CC:DD:04:08" not in data["devices"]
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_device_list_read_failure_limit_resets_after_success(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """The fourth failed device read fails the update; a success resets the cap."""
+    device = AIOSysbus.__devices["status"][69]
+    device["Key"] = "AA:BB:CC:DD:04:08"
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = config_entry.runtime_data
+    previous_data = coordinator.data
+    device_reader = AIOSysbus.devices.async_get_devices
+    successful_device_reader = device_reader.side_effect
+    device_reader.side_effect = AiosysbusException("temporary device-list failure")
+
+    for _ in range(3):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.last_update_success is True
+        assert coordinator.data["devices"] == previous_data["devices"]
+
+    state = hass.states.get("device_tracker.pc_408")
+    assert state is not None
+    assert state.state == STATE_HOME
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is False
+    assert coordinator.data["devices"] == previous_data["devices"]
+
+    device_reader.side_effect = successful_device_reader
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.last_update_success is True
+
+    device_reader.side_effect = AiosysbusException("temporary device-list failure")
+    for _ in range(3):
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert coordinator.last_update_success is True
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_initial_device_read_failure_uses_empty_defaults(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """A failed first device-list read starts with empty devices and counts."""
+    AIOSysbus.devices.async_get_devices.side_effect = AiosysbusException(
+        "initial device-list failure"
+    )
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    data = config_entry.runtime_data.data
+
+    assert data["devices"] == {}
+    assert data["count_wireless_devices"] == 0
+    assert data["count_wired_devices"] == 0
+
+
+@pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
+async def test_legitimately_empty_device_list_clears_previous_data(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    AIOSysbus: AsyncMock | MagicMock,
+) -> None:
+    """A successful empty device list still clears devices and counts."""
+    AIOSysbus.__devices["status"][69]["Key"] = "AA:BB:CC:DD:04:08"
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    data = config_entry.runtime_data.data
+    assert data["devices"]
+
+    AIOSysbus.__devices["status"].clear()
+    await config_entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    data = config_entry.runtime_data.data
+    assert data["devices"] == {}
+    assert data["count_wireless_devices"] == 0
+    assert data["count_wired_devices"] == 0
 
 
 @pytest.mark.parametrize("AIOSysbus", ["7"], indirect=True)
