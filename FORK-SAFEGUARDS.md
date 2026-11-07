@@ -63,7 +63,7 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   Preserve the separate fork session-persistence and orphan-cleanup paths
   when changing coordinator error handling.
 
-  **Operational note:** On René's real Livebox, startup can log
+  **Operational note:** On a real Livebox Fibre, startup can log
   `Failed to logout orphaned session (Livebox may be unreachable)`. This
   best-effort logout warning is harmless when data starts flowing immediately
   afterward; do not mistake the warning alone for a failed integration setup.
@@ -154,9 +154,9 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Why:** Owner-provided operating context: `buildTopology`
   (`topologydiagnostics.async_set_topodiags_build`) is the heaviest Livebox
   call, performs a mesh scan, and has a 30-second timeout. Upstream's 5-minute
-  cadence can mean about 288 builds per day. René has no repeaters: his TP-Link
-  Deco mesh is behind the Livebox on a separate sub-LAN, so the Livebox sees
-  only the Deco router as an Ethernet client. The 24-hour interval reduces
+  cadence can mean about 288 builds per day. Setups without a Livebox
+  repeater (for example a third-party mesh behind the Livebox on its own
+  sub-LAN) gain nothing from frequent rebuilds. The 24-hour interval reduces
   router load and the risk of stressing or crashing the Livebox.
 - **Where:** `coordinator.py::TOPOLOGY_SCAN_INTERVAL`,
   `TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS`,
@@ -301,8 +301,8 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
 ## Deployment note
 
-The integration runs on Home Assistant **cam** (Pi56), on the Livebox LAN;
-production is behind the Deco and is not the deployment target. Deploy by
-copying only changed files over SSH, file by file, then restart Home Assistant.
-Do not rely on a HACS update on `cam`. Keep Livebox load low, especially during
+The fork is validated on a dedicated test Home Assistant instance on the
+Livebox LAN before any release. Deploy by copying only changed files over SSH,
+file by file, then restart Home Assistant. Do not rely on a HACS update on the
+test instance. Keep Livebox load low, especially during
 topology-related testing.
