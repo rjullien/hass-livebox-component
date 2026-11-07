@@ -7,12 +7,11 @@ unload, HA stop and config-flow abort — thank you for that. One gap remains:
 
 **A crash or power loss never reaches `async_unload`.** The context stays open
 on the router until it expires. The Livebox session table is small, so a few
-unclean restarts (or a stormy night at a rural site) can exhaust it and the
+unclean restarts can exhaust it and the
 API stops accepting logins until sessions time out. Rare per-day, but
 deterministic over months — exactly the failure a remote, unattended install
-cannot recover from alone. Concrete case: a Raspberry Pi 3 at a remote site,
-with short undervoltage events about once a day and an unclean power loss on
-2026-10-23.
+cannot recover from alone. Concrete case: an unattended Raspberry Pi with
+short undervoltage events and an occasional unclean power loss.
 
 ## Proposal
 
