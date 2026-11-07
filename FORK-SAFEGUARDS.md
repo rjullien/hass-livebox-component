@@ -302,7 +302,7 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 ## Deployment note
 
 The fork is validated on a dedicated test Home Assistant instance on the
-Livebox LAN before any release. Deploy by
-copying only changed files over SSH, file by file, then restart Home Assistant.
-Do not rely on a HACS update on the test instance. Keep Livebox load low, especially during
+Livebox LAN before any release. Deploy by copying only changed files over SSH,
+file by file, then restart Home Assistant. Do not rely on a HACS update on the
+test instance. Keep Livebox load low, especially during
 topology-related testing.
