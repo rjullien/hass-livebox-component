@@ -1,72 +1,35 @@
 # Fork safeguards for upstream syncs
 
-This inventory tracks the fork-specific safeguards on release `2.6.1.2`,
-following the merge of upstream `master` at `8503c7f`. Behaviors aligned with
-upstream are marked explicitly; the remaining entries account for the fork's
-code, test, workflow, and tooling differences. Reasons are grounded in the
-fork changelog, linked issues, or owner-provided operating context; anything
-not documented is marked explicitly rather than inferred.
+This inventory tracks the fork safeguards on release `2.6.1.3`, following
+upstream release `2.6.1`. Behaviors aligned with upstream are marked
+explicitly; the remaining entries account for the fork's code, test,
+workflow, and tooling differences.
 
 See the README's [Upstream contributions](README.md#upstream-contributions) section for current proposals and status.
 
 ## Safeguard inventory
 
-### 1. Persist, release, and recover Livebox sessions
+### 1. Persist, release, and recover Livebox sessions (aligned with upstream in 2.6.1.3)
 
-- **What:** Persist each entry's session cookies, context ID, base URL, and TLS
-  verification setting after successful polling, but write only when that
-  tuple changes. Use upstream `aiosysbus 1.2.6` logout on unload, HA stop,
-  failed first refresh, and config flow. Before setup, attempt to release a
-  persisted orphan left by a crash or power loss.
-- **Upstream alignment:** Upstream #360 now clears the in-memory session token
-  after a top-level `HttpRequestFailed`, allowing the next polling cycle to
-  authenticate again. This behavior is no longer a fork-only divergence.
-- **Logout mechanism:** Upstream `self.api.async_logout()` handles normal
-  logout. Orphan cleanup posts to the stored `/ws` URL with session cookies,
-  `Authorization: X-Sah-Logout <context_id>`, content type
-  `application/x-sah-ws-1-call+json`, and a `releaseContext` request for
-  `sah.Device.Information` with application name `so_sdkut`. Success requires
-  HTTP 200 and JSON `{"status": 0}`.
-- **Verification:** Confirmed on a Livebox Fibre running firmware
-  `ARFI-fr-G06.R06.C01_12` on 2026-10-10. The web UI's logout request releases
-  the context; a subsequent call using it returns error 13. Using a normal
-  `X-Context` header returns error 196618.
+- **Status:** Upstream #377 ships session persistence and orphan release in
+  `2.6.1` with `aiosysbus 1.2.7`. The coordinator saves changed
+  `AIOSysbus.session_state` values through Home Assistant `Store` and attempts
+  `async_release_session()` for a saved session before normal setup. The fork's
+  separate session store and logout implementation were removed.
 - **Why:** The Livebox has a limited session table. Orphaned sessions otherwise
-  remain until timeout; repeated HA restarts/reloads can exhaust the table and
-  make the API stop responding. This is documented by commit `f37b631` (issue
-  #8) and the README fork changelog. Commit `fb7a9bc` documents why a stale
-  token must be invalidated after a communication failure.
-- **Where:** `session.py::LiveboxSessionStore` and
-  `session.py::async_logout_session`; `coordinator.py::async_persist_session`,
-  `coordinator.py::async_logout`, and
-  `LiveboxDataUpdateCoordinator._async_update_data` (including upstream
-  reauthentication after `HttpRequestFailed`);
-  `__init__.py::_async_logout_orphaned_session` and `async_setup_entry`.
-- **Protecting tests:** `tests/test_session.py::test_logout_session_success`,
-  `test_logout_session_failure_payload`, `test_logout_session_failure_status`,
-  `test_logout_session_exception`, `test_logout_session_non_json`,
-  `test_logout_session_missing_context_id`,
-  `test_store_save_load_roundtrip`, `test_store_clear`,
-  `test_coordinator_persists_only_changed_session`,
-  `test_unload_calls_api_logout_and_clears_persisted_session`, and
-  `test_orphan_cleanup_on_boot`.
-- **Merge pitfalls:** Do not revert to `/logout.cmd`; it returned HTTP 404 on
-  Livebox Fibre. Preserve the `X-Sah-Logout` header and `releaseContext` body,
-  and pass the stored context ID with the cookies and TLS setting for orphan
-  logout. Keep storage scoped to the config entry. Stop platform polling
-  before logging out on unload. Keep upstream token invalidation in the
-  top-level update failure path; the `f37b631` commit explains that clearing it
-  for every endpoint failure can trigger a login storm during one polling
-  cycle. The upstream
+  remain until timeout; repeated Home Assistant restarts or reloads can exhaust
+  the table and make the API stop responding. Stale-token invalidation after a
+  transport failure remains upstream behavior.
+- **Where:** `coordinator.py::_async_release_orphaned_session`,
+  `coordinator.py::_async_save_session`, `coordinator.py::async_logout`, and
+  the coordinator setup and update paths.
+- **Protecting tests:** Upstream `tests/test_session.py` covers orphan release,
+  release failure, session changes, and unload cleanup. The upstream
   `test_transport_failure_clears_token_and_next_refresh_reauthenticates` and
-  `test_non_transport_error_leaves_session_token` tests protect that behavior.
-  Preserve the separate fork session-persistence and orphan-cleanup paths
-  when changing coordinator error handling.
-
-  **Operational note:** On a real Livebox Fibre, startup can log
-  `Failed to logout orphaned session (Livebox may be unreachable)`. This
-  best-effort logout warning is harmless when data starts flowing immediately
-  afterward; do not mistake the warning alone for a failed integration setup.
+  `test_non_transport_error_leaves_session_token` tests protect token handling.
+- **Merge pitfalls:** Take upstream session handling verbatim. Do not restore
+  the fork's separate `session.py`, direct logout request, or duplicate
+  persistence path.
 
 ### 2. Rolling 32-bit counters (aligned with upstream in 2.6.1.1)
 
@@ -78,7 +41,7 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Merge pitfalls:** Keep the upstream per-entity rollover handling; do not
   restore older module-level shared state.
 
-### 3. Preserve WAN access switch identity and manual override semantics
+### 3. Preserve WAN access switch identity and manual override semantics (aligned with upstream in 2.6.1.3)
 
 - **What:** WAN access switch IDs include the Livebox serial number, with
   `_migrate_wan_access_unique_ids` upgrading existing registry entries. The
@@ -93,10 +56,8 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Protecting tests:** `tests/test_switch.py::test_switch_wan_access`,
   `tests/test_switch.py::test_switch_wan_access_override_without_value_disable`,
   and `tests/test_switch.py::test_wan_access_switch_unique_id_migration`.
-- **Merge pitfalls:** These behaviors and tests are already present in the
-  upstream v2.6.0 comparison base; there is no WAN-access hunk in
-  `30c75a0..origin/master`. Keep them when resolving a later upstream conflict,
-  but do not blindly replay or duplicate changes already in the new base.
+- **Merge pitfalls:** Take the upstream implementation and tests verbatim;
+  do not duplicate the WAN identity migration or override behavior.
 
 ### 4. Fibre guest Wi-Fi helpers (removed in 2.6.0.3)
 
@@ -145,32 +106,29 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Merge pitfalls:** Keep the upstream match without a catch-all warning or
   fallback; do not remove the `Funbox6` case.
 
-### 7. Rate-limit topology builds when there are no repeaters
+### 7. Rate-limit topology builds when there are no repeaters (aligned with upstream in 2.6.1.3)
 
-- **What:** Rebuild topology every 5 minutes when repeaters are known, but use
-  `TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS` (24 hours) with no repeaters. Set
-  `_topology_cache_at` before router calls so invalid or failed builds are
-  rate-limited too.
+- **What:** Upstream #375 ships topology caching in `2.6.1`. Builds are
+  retried at the regular 5-minute interval after a failure; the 24-hour
+  interval applies only after a successful build finds no repeaters.
 - **Why:** Owner-provided operating context: `buildTopology`
   (`topologydiagnostics.async_set_topodiags_build`) is the heaviest Livebox
   call, performs a mesh scan, and has a 30-second timeout. Upstream's 5-minute
   cadence can mean about 288 builds per day. Setups without a Livebox
-  repeater (for example a third-party mesh behind the Livebox on its own
-  sub-LAN) gain nothing from frequent rebuilds. The 24-hour interval reduces
+  repeater gain nothing from frequent rebuilds. The 24-hour interval reduces
   router load and the risk of stressing or crashing the Livebox.
 - **Where:** `coordinator.py::TOPOLOGY_SCAN_INTERVAL`,
   `TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS`,
   `LiveboxDataUpdateCoordinator._topology_scan_interval`, and
   `LiveboxDataUpdateCoordinator.async_get_topology`.
-- **Protecting tests:** `tests/test_coordinator.py::test_topology_rebuilt_daily_without_repeaters`,
-  `tests/test_coordinator.py::test_topology_failed_build_not_retried_every_cycle`,
-  and `tests/test_coordinator.py::test_topology_rebuilt_after_scan_interval`;
-  the roaming/repeater behavior is also covered by the device-tracker tests in
-  entry 5.
-- **Merge pitfalls:** Keep the five-minute interval for known repeaters, the
-  24-hour no-repeater interval, and the timestamp assignment before any
-  topology API request. Moving the timestamp to the success path reintroduces
-  one-minute retries after failures.
+- **Protecting tests:** Upstream tests
+  `tests/test_coordinator.py::test_topology_rebuilt_daily_without_repeaters`,
+  `test_topology_failed_build_retried_at_regular_interval`, and
+  `test_topology_rebuilt_after_scan_interval`; repeater roaming is also covered
+  by the device-tracker tests in entry 5.
+- **Merge pitfalls:** Take upstream topology code and tests verbatim. Reset to
+  the 5-minute interval before each build, and set the 24-hour interval only
+  after a successful build finds no repeaters.
 
 ### 8. Display-device option (aligned with upstream in 2.6.1.1)
 
@@ -183,7 +141,7 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Merge pitfalls:** Keep the upstream options mapping and do not restore
   `DISPLAY_DEVICES_OPTIONS`, normalization helpers, or setup-time migration.
 
-### 9. Call-log calendar
+### 9. Call-log calendar (aligned with upstream in 2.6.1.3)
 
 - **Status:** Upstream now fixes overlapping call windows. The fork's 30-day
   pruning remains removed; upstream still does not prune the cache.
@@ -192,8 +150,8 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
   practically no calls.
 - **Where:** `calendar.py::LiveboxCallLogCalendar`.
 - **Protecting tests:** `tests/test_calendar.py::test_calendar_returns_overlapping_calls`.
-- **Merge pitfalls:** Keep the upstream overlapping-window fix and do not
-  re-introduce pruning.
+- **Merge pitfalls:** Take the upstream overlapping-window fix and test
+  verbatim; do not re-introduce pruning.
 
 ### 10. Preserve the legacy `unique_id` guard
 
@@ -213,19 +171,21 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 
 ### 11. Fork metadata and tooling / CI
 
-- **What:** GitHub Actions workflows run HACS and stale handling for owner
-  `rjullien`; release tags accept both `X.Y.Z` and fork `X.Y.Z.N`. Dependabot
-  checks GitHub Actions and `uv` weekly. The upstream Python 3.14 development
-  and lint configuration is kept in `pyproject.toml`, `.pre-commit-config.yaml`,
-  and `uv.lock`. The manifest points code ownership, documentation, and issue
-  tracking at the fork and carries version `2.6.1.2`. HACS declares minimum HA
-  2026.8.0; README records fork status, versioning, and changelog.
+- **What:** Preserve the fork-specific HACS workflow and fork metadata. Keep
+  upstream release, stale, test, validation, and lint workflows where they
+  replace fork versions. Release tags accept both `X.Y.Z` and fork `X.Y.Z.N`.
+  Dependabot checks the configured ecosystems weekly. The upstream Python
+  3.14 development and lint configuration is kept in `pyproject.toml`,
+  `.pre-commit-config.yaml`, and `uv.lock`. The manifest points code ownership,
+  documentation, and issue tracking at the fork and carries version
+  `2.6.1.3`. HACS declares minimum HA 2026.8.0; README records fork status,
+  versioning, and changelog.
 - **Why:** The README changelog documents the modern development stack,
   lockfile compatibility, and four-part versioning. Upstream now requires HA
   2026.8.0 and uses Python 3.14 syntax.
-- **Where:** `.github/dependabot.yml`;
-  `.github/workflows/check-lint.yml`, `hacs.yml`, `pytest.yml`, `release.yml`,
-  and `stale.yaml`; `.pre-commit-config.yaml`, `pyproject.toml`, `uv.lock`,
+- **Where:** `.github/dependabot.yml`; `.github/workflows/hacs.yml`,
+  `release.yml`, `stale.yml`, `tests.yml`, and `validate.yml`;
+  `.pre-commit-config.yaml`, `pyproject.toml`, `uv.lock`,
   `custom_components/livebox/manifest.json`, and `README.md`.
 - **Protecting tests:** No unit test covers workflow or repository metadata.
   Validate these through `uv run prek run --all-files` and the repository's
@@ -289,7 +249,7 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 6. Check the safeguard symbols and test names after the merge. For example:
 
    ```bash
-   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|async_persist_session|LiveboxSessionStore|async_logout_session|_async_logout_orphaned_session|HttpRequestFailed|_migrate_wan_access_unique_ids|async_get_device_by_identifier|get_parent_device_id|Funbox6' custom_components/livebox
+   rg -n 'TOPOLOGY_SCAN_INTERVAL_NO_REPEATERS|_topology_scan_interval|session_state|async_release_session|_async_save_session|HttpRequestFailed|_migrate_wan_access_unique_ids|async_get_device_by_identifier|get_parent_device_id|Funbox6' custom_components/livebox
    ```
 
    Also confirm the protecting test names listed above still exist and update
