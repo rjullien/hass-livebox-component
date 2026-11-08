@@ -7,11 +7,11 @@
 
 Custom component for [Home Assistant](https://www.home-assistant.io/) to observe and control [Orange Livebox](http://www.orange.fr/) routers.
 
-> **Fork status:** Based on upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **2.6.1** (tag commit `5fefc90`), fork release **2.6.1.3**. Fork-specific safeguards are preserved; cosmetic-only deviations from upstream are avoided.
+> **Fork status — no longer maintained:** This fork is no longer used by its owner. Since 2026-11-08, the owner's installation has run upstream [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component) **2.6.1** via HACS. The last fork release is **2.6.1.3** (upstream 2.6.1 plus device-list retention on read failure). This repository is kept for history and upstream-contribution tracking and is not maintained further — use upstream.
 >
 > **Versioning:** `X.Y.Z.N` — `X.Y.Z` = upstream base, `N` = fork revision (e.g. `2.6.0.1` = upstream 2.6.0, fork rev 1).
 >
-> **HACS:** use repository `rjullien/hass-livebox-component` (not `cyr-ius/hass-livebox-component`) to get this fork.
+> **HACS:** install the maintained upstream repository `cyr-ius/hass-livebox-component`.
 
 ## Requirements
 
@@ -44,19 +44,19 @@ own Python runtime.
 
 ## Installation
 
-### HACS (this fork)
+### HACS (upstream)
 
-Add the custom repository in HACS:
+Add the upstream repository in HACS:
 
-`https://github.com/rjullien/hass-livebox-component`
+`https://github.com/cyr-ius/hass-livebox-component`
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=rjullien&repository=hass-livebox-component&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=cyr-ius&repository=hass-livebox-component&category=integration)
 
 Then add the integration:
 
 [![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=livebox)
 
-> Do **not** use `cyr-ius/hass-livebox-component` if you want this fork (session management, multi-box fixes).
+> Use `cyr-ius/hass-livebox-component`; this fork is no longer maintained.
 
 ### Initial setup
 
@@ -112,7 +112,7 @@ CI runs on Python 3.14 with Home Assistant **2026.10.0** (via `pytest-homeassist
 
 Original project: [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component)
 
-Report fork-specific issues on [rjullien/hass-livebox-component/issues](https://github.com/rjullien/hass-livebox-component/issues).
+Report issues on [cyr-ius/hass-livebox-component](https://github.com/cyr-ius/hass-livebox-component/issues).
 
 ## Changelog (fork)
 
