@@ -153,21 +153,13 @@ See the README's [Upstream contributions](README.md#upstream-contributions) sect
 - **Merge pitfalls:** Take the upstream overlapping-window fix and test
   verbatim; do not re-introduce pruning.
 
-### 10. Preserve the legacy `unique_id` guard
+### 10. Legacy `unique_id` guard (removed in 2.6.1.3)
 
-- **What:** `async_setup_entry` resets a legacy non-string config-entry
-  `unique_id` so setup can repopulate it from the router serial; the reset is a
-  no-op when `unique_id` is already a string. The uptime icon is now aligned
-  with upstream as `mdi:progress-clock`.
-- **Why:** The origin of the legacy non-string `unique_id` reset is
-  undocumented; it is a no-op when `unique_id` is already a string. The
-  upstream uptime icon fix was merged as cyr-ius#353.
-- **Where:** `__init__.py::async_setup_entry` and `sensor.py`.
-- **Protecting tests:** `tests/test_setup.py::test_setup_entry` and
-  `tests/test_setup.py::test_coordinator_refresh` provide general
-  setup/refresh coverage.
-- **Merge pitfalls:** Keep the non-string guard and leave the uptime icon
-  aligned with upstream.
+- The fork's non-string config-entry `unique_id` reset was removed in 2.6.1.3;
+  `__init__.py` now matches upstream `2.6.1`. The real-device entry ID is
+  already a string, so the guard did not run.
+- The uptime icon remains aligned with upstream as `mdi:progress-clock`
+  (cyr-ius#353).
 
 ### 11. Fork metadata and tooling / CI
 

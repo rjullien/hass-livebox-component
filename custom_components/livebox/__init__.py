@@ -99,15 +99,6 @@ def _migrate_wan_access_unique_ids(
 
 async def async_setup_entry(hass: HomeAssistant, entry: LiveboxConfigEntry) -> bool:
     """Set up Livebox as config entry."""
-    # Fix: migrate unique_id from bool to string if needed (legacy entries)
-    if entry.unique_id is not None and not isinstance(entry.unique_id, str):
-        _LOGGER.warning(
-            "Migrating Livebox config entry unique_id from %s (%s) to None",
-            entry.unique_id,
-            type(entry.unique_id).__name__,
-        )
-        hass.config_entries.async_update_entry(entry, unique_id=None)
-
     coordinator = LiveboxDataUpdateCoordinator(hass, entry)
     try:
         await coordinator.async_config_entry_first_refresh()
